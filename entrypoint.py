@@ -17,6 +17,8 @@ from typing import List, TypedDict
 import click
 import google.generativeai as genai
 import requests
+from github import Auth, Github
+from github.GithubException import GithubException
 from google.api_core import exceptions as google_exceptions
 from loguru import logger
 
@@ -26,6 +28,7 @@ class AiReviewConfig(TypedDict):
     diff: str
     extra_prompt: str
     prompt_chunk_size: int
+    comments_text: str
     temperature: float = 1
     top_p: float = 0.95
     top_k: int = 0
@@ -94,6 +97,72 @@ def create_a_comment_to_pull_request(
     return response
 
 
+def get_all_pr_comments_text(
+    github_token: str, github_repository: str, pull_request_number: int
+) -> str:
+    """Collect issue comments, review comments and reviews for a PR and format them.
+
+    Returns a single text blob suitable to send as model context.
+    """
+    g = Github(auth=Auth.Token(github_token))
+    try:
+        repo = g.get_repo(github_repository)
+        pr = repo.get_pull(pull_request_number)
+
+        # Issue comments (general discussion on the PR as an issue)
+        issue_comments = list(pr.as_issue().get_comments())
+
+        # Review comments (inline file comments)
+        review_comments = list(pr.get_comments())
+
+        # Reviews (summary reviews, states like APPROVED/CHANGES_REQUESTED)
+        reviews = list(pr.get_reviews())
+
+        lines: List[str] = []
+        if issue_comments:
+            lines.append("[Issue comments]")
+            for c in issue_comments:
+                author = getattr(getattr(c, "user", None), "login", "unknown")
+                created = getattr(c, "created_at", "")
+                body = (getattr(c, "body", "") or "").strip()
+                lines.append(f"- {author} ({created}): {body}")
+
+        if review_comments:
+            lines.append("[Review comments]")
+            for c in review_comments:
+                author = getattr(getattr(c, "user", None), "login", "unknown")
+                created = getattr(c, "created_at", "")
+                path = getattr(c, "path", "")
+                line_info = (
+                    getattr(c, "original_line", None)
+                    or getattr(c, "line", None)
+                    or "?"
+                )
+                body = (getattr(c, "body", "") or "").strip()
+                lines.append(f"- {author} ({created}) {path}:{line_info}: {body}")
+
+        if reviews:
+            lines.append("[Reviews]")
+            for r in reviews:
+                author = getattr(getattr(r, "user", None), "login", "unknown")
+                state = getattr(r, "state", "")
+                submitted = getattr(r, "submitted_at", "")
+                body = (getattr(r, "body", "") or "").strip()
+                if body:
+                    lines.append(f"- {author} ({submitted}) [{state}]: {body}")
+                else:
+                    lines.append(f"- {author} ({submitted}) [{state}]: <no body>")
+
+        joined = "\n".join(lines).strip()
+        logger.info(
+            f"Collected PR comments payload length: {len(joined)} characters across "
+            f"{len(issue_comments)} issue, {len(review_comments)} review, {len(reviews)} reviews"
+        )
+        return joined
+    finally:
+        g.close()
+
+
 def chunk_string(input_string: str, chunk_size) -> List[str]:
     """Chunk a string"""
     chunked_inputs = []
@@ -128,6 +197,7 @@ def get_review(config: AiReviewConfig) -> List[str]:
     diff = config["diff"]
     extra_prompt = config["extra_prompt"]
     prompt_chunk_size = config["prompt_chunk_size"]
+    comments_text = config.get("comments_text", "")
     temperature = config.get("temperature", 1)
     top_p = config.get("top_p", 0.95)
     top_k = config.get("top_k", 0)
@@ -159,8 +229,25 @@ def get_review(config: AiReviewConfig) -> List[str]:
                         {"role": "model", "parts": ["Ok"]},
                     ]
                 )
-                response = convo.send_message(chunked_diff)
-                review_result = getattr(convo.last, "text", response.text)
+                # 1) Send the diff chunk
+                _ = convo.send_message(chunked_diff)
+
+                # 2) Send PR comments context (if any), instructing the model to take them into account
+                if comments_text.strip():
+                    comments_prompt = (
+                        "These are the comments already made in this PR by reviewers "
+                        "and participants. Please take them into consideration when "
+                        "performing your review.\n\n" + comments_text
+                    )
+                    _ = convo.send_message(comments_prompt)
+
+                # 3) Request the actual output from the AI now that context is set
+                final_instruction = (
+                    "Now, considering the pull request diff and the PR comments above, "
+                    "provide your review according to the earlier instructions."
+                )
+                final_response = convo.send_message(final_instruction)
+                review_result = getattr(convo.last, "text", final_response.text)
             except (
                 google_exceptions.ResourceExhausted,
                 google_exceptions.DeadlineExceeded,
@@ -296,6 +383,18 @@ def main(
     api_key = os.getenv("GEMINI_API_KEY")
     genai.configure(api_key=api_key)
 
+    # Fetch PR comments to include as context (skip in local mode or on failure)
+    comments_text = ""
+    if os.getenv("LOCAL") is None:
+        try:
+            comments_text = get_all_pr_comments_text(
+                github_token=os.getenv("GITHUB_TOKEN"),
+                github_repository=os.getenv("GITHUB_REPOSITORY"),
+                pull_request_number=int(os.getenv("GITHUB_PULL_REQUEST_NUMBER")),
+            )
+        except GithubException as exc:
+            logger.warning(f"Failed to fetch PR comments: {exc}")
+
     # Request a code review
     review_conf: AiReviewConfig = {
         "diff": diff,
@@ -304,6 +403,7 @@ def main(
         "temperature": temperature,
         "top_p": top_p,
         "prompt_chunk_size": diff_chunk_size,
+        "comments_text": comments_text,
     }
     chunked_reviews, summarized_review = get_review(review_conf)
     logger.debug(f"Summarized review: {summarized_review}")

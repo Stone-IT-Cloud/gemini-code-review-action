@@ -25,6 +25,24 @@ If the diff exceeds the model's context window, the Action splits it into chunks
 - `pull_request_chunk_size` (optional): Diff chunk size to fit model limits.
 - `log_level` (optional): Logging level (e.g., `INFO`, `DEBUG`).
 
+### Environment Variables for Quota Management
+
+The following optional environment variables can be set to configure quota tracking and fail-fast behavior:
+
+- `GEMINI_FAIL_FAST_ON_NO_QUOTA` (default: `1`): When set to `1`, the action will immediately fail when daily quota exhaustion is detected, rather than continuing to retry. Set to `0` to disable fail-fast.
+- `GEMINI_QUOTA_RPM` (optional): Your Gemini API requests-per-minute quota limit. When provided, the action logs estimated remaining RPM after each request.
+- `GEMINI_QUOTA_TPM` (optional): Your Gemini API tokens-per-minute quota limit. When provided, the action logs estimated remaining TPM after each request.
+- `GEMINI_QUOTA_RPD` (optional): Your Gemini API requests-per-day quota limit. When provided, the action logs estimated remaining RPD after each request.
+
+**Example with quota tracking:**
+```yaml
+env:
+  GEMINI_FAIL_FAST_ON_NO_QUOTA: "1"
+  GEMINI_QUOTA_RPM: "60"
+  GEMINI_QUOTA_TPM: "32000"
+  GEMINI_QUOTA_RPD: "1500"
+```
+
 ## Features
 - Splits large diffs and aggregates per-chunk analysis.
 - Summarizes into a single review comment posted to the PR.

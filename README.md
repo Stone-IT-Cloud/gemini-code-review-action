@@ -12,6 +12,8 @@ If the diff exceeds the model's context window, the Action splits it into chunks
 
 - `gemini_api_key` (required): Gemini API key (secret recommended).
 - `github_token` (required): GitHub token. Use the default `${{ secrets.GITHUB_TOKEN }}`.
+- `dockerhub_username` (optional): Docker Hub username to authenticate pulls during the action image build (helps avoid Docker Hub rate limits).
+- `dockerhub_token` (optional): Docker Hub access token/password (secret recommended).
 - `github_repository` (required): Target repository (defaults to `${{ github.repository }}`).
 - `github_pull_request_number` (required): PR number (defaults to `${{ github.event.pull_request.number }}`).
 - `git_commit_hash` (required): PR head SHA (defaults to `${{ github.event.pull_request.head.sha }}`).
@@ -74,6 +76,9 @@ jobs:
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: authenticate Docker Hub pulls to avoid rate limits
+          # dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+          # dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
           github_repository: ${{ github.repository }}
           github_pull_request_number: ${{ github.event.pull_request.number }}
           git_commit_hash: ${{ github.event.pull_request.head.sha }}

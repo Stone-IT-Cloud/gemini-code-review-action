@@ -23,6 +23,21 @@ from google.api_core import exceptions as google_exceptions
 from loguru import logger
 
 
+def write_github_output(name: str, value: str) -> None:
+    """Write an output for GitHub Actions.
+
+    If the action is not running in GitHub Actions (no GITHUB_OUTPUT env var), this is a no-op.
+    """
+    output_path = os.getenv("GITHUB_OUTPUT")
+    if not output_path:
+        return
+
+    # Use a unique delimiter to safely support multiline values.
+    delimiter = f"ghadelim_{int(time.time() * 1000)}"
+    with open(output_path, "a", encoding="utf-8") as f:
+        f.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
+
+
 class AiReviewConfig(TypedDict):
     model: str
     diff: str
@@ -134,9 +149,7 @@ def get_all_pr_comments_text(
                 created = getattr(c, "created_at", "")
                 path = getattr(c, "path", "")
                 line_info = (
-                    getattr(c, "original_line", None)
-                    or getattr(c, "line", None)
-                    or "?"
+                    getattr(c, "original_line", None) or getattr(c, "line", None) or "?"
                 )
                 body = (getattr(c, "body", "") or "").strip()
                 lines.append(f"- {author} ({created}) {path}:{line_info}: {body}")
@@ -412,6 +425,13 @@ def main(
     # Format reviews
     review_comment = format_review_comment(
         summarized_review=summarized_review, chunked_reviews=chunked_reviews
+    )
+
+    # Expose outputs to workflows (works for both container actions and composite wrappers).
+    write_github_output("review_result", review_comment)
+    # Keep this intentionally small to avoid output size limits.
+    write_github_output(
+        "entire_prompt_body", get_review_prompt(extra_prompt=extra_prompt)
     )
 
     # if it is running in a local environment don't try to create a comment

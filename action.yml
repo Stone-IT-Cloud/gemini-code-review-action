@@ -117,10 +117,17 @@ runs:
         GITHUB_REPOSITORY: ${{ inputs.github_repository }}
         GITHUB_PULL_REQUEST_NUMBER: ${{ inputs.github_pull_request_number }}
         GIT_COMMIT_HASH: ${{ inputs.git_commit_hash }}
+        PR_DIFF_FILE: ${{ inputs.pull_request_diff_file }}
+        PR_DIFF_CHUNK_SIZE: ${{ inputs.pull_request_chunk_size }}
+        MODEL: ${{ inputs.model }}
+        EXTRA_PROMPT: ${{ inputs.extra_prompt }}
+        TEMPERATURE: ${{ inputs.temperature }}
+        TOP_P: ${{ inputs.top_p }}
+        LOG_LEVEL: ${{ inputs.log_level }}
       run: |
         set -euo pipefail
 
-        DIFF_FILE="${INPUT_PULL_REQUEST_DIFF_FILE}"
+        DIFF_FILE="${PR_DIFF_FILE}"
 
         # Ensure the diff file is accessible inside the container:
         # - Always mount the workspace (at the same absolute path)
@@ -140,13 +147,13 @@ runs:
         VOLUMES+=( "-v" "${OUTPUT_DIR}:${OUTPUT_DIR}" )
 
         ARGS=(
-          "--model=${INPUT_MODEL}"
-          "--extra-prompt=${INPUT_EXTRA_PROMPT}"
-          "--temperature=${INPUT_TEMPERATURE}"
-          "--top-p=${INPUT_TOP_P}"
-          "--diff-chunk-size=${INPUT_PULL_REQUEST_CHUNK_SIZE}"
+          "--model=${MODEL}"
+          "--extra-prompt=${EXTRA_PROMPT}"
+          "--temperature=${TEMPERATURE}"
+          "--top-p=${TOP_P}"
+          "--diff-chunk-size=${PR_DIFF_CHUNK_SIZE}"
           "--diff-file=${DIFF_FILE}"
-          "--log-level=${INPUT_LOG_LEVEL}"
+          "--log-level=${LOG_LEVEL}"
         )
 
         docker run --rm \

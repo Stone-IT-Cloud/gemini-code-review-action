@@ -22,6 +22,14 @@ inputs:
   github_token:
     description: "The GitHub token to use for the action"
     required: true
+  dockerhub_username:
+    description: "Optional Docker Hub username to authenticate image pulls during build (helps avoid rate limits)"
+    required: false
+    default: ""
+  dockerhub_token:
+    description: "Optional Docker Hub access token/password for docker login (secret recommended)"
+    required: false
+    default: ""
   github_repository:
     description: "The GitHub repository to use for the action"
     required: true
@@ -79,18 +87,77 @@ branding:
   color: "blue"
 
 runs:
-  using: docker
-  image: Dockerfile
-  env:
-    GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
-    GITHUB_TOKEN: ${{ inputs.github_token }}
-    GITHUB_REPOSITORY: ${{ inputs.github_repository }}
-    GITHUB_PULL_REQUEST_NUMBER: ${{ inputs.github_pull_request_number }}
-    GIT_COMMIT_HASH: ${{ inputs.git_commit_hash }}
-  args:
-    - "--model=${{ inputs.model }}"
-    - "--extra-prompt=${{ inputs.extra_prompt }}"
-    - "--temperature=${{ inputs.temperature }}"
-    - "--top-p=${{ inputs.top_p }}"
-    - "--diff-chunk-size=${{ inputs.pull_request_chunk_size }}"
-    - "--diff-file=${{ inputs.pull_request_diff_file }}"
+  using: composite
+  steps:
+    - name: "Docker Hub login (optional)"
+      if: ${{ inputs.dockerhub_username != '' && inputs.dockerhub_token != '' }}
+      shell: bash
+      env:
+        DOCKERHUB_USERNAME: ${{ inputs.dockerhub_username }}
+        DOCKERHUB_TOKEN: ${{ inputs.dockerhub_token }}
+      run: |
+        set -euo pipefail
+        printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+
+    - name: "Build action image"
+      shell: bash
+      env:
+        ACTION_IMAGE_TAG: gemini-code-review-action:${{ github.run_id }}-${{ github.run_attempt }}
+      run: |
+        set -euo pipefail
+        docker build -t "$ACTION_IMAGE_TAG" "$GITHUB_ACTION_PATH"
+
+    - name: "Run action"
+      id: gpt
+      shell: bash
+      env:
+        ACTION_IMAGE_TAG: gemini-code-review-action:${{ github.run_id }}-${{ github.run_attempt }}
+        GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GITHUB_REPOSITORY: ${{ inputs.github_repository }}
+        GITHUB_PULL_REQUEST_NUMBER: ${{ inputs.github_pull_request_number }}
+        GIT_COMMIT_HASH: ${{ inputs.git_commit_hash }}
+      run: |
+        set -euo pipefail
+
+        DIFF_FILE="${INPUT_PULL_REQUEST_DIFF_FILE}"
+
+        # Ensure the diff file is accessible inside the container:
+        # - Always mount the workspace (at the same absolute path)
+        # - Mount /tmp (common for workflows that write diffs to /tmp)
+        VOLUMES=( "-v" "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" "-v" "/tmp:/tmp" )
+
+        # If an absolute diff path is provided outside workspace/tmp, mount its directory too.
+        if [[ "${DIFF_FILE}" = /* ]]; then
+          DIFF_DIR="$(dirname "${DIFF_FILE}")"
+          if [[ "${DIFF_DIR}" != "${GITHUB_WORKSPACE}"* && "${DIFF_DIR}" != /tmp* ]]; then
+            VOLUMES+=( "-v" "${DIFF_DIR}:${DIFF_DIR}" )
+          fi
+        fi
+
+        # Allow the container to write step outputs back to the runner.
+        OUTPUT_DIR="$(dirname "${GITHUB_OUTPUT}")"
+        VOLUMES+=( "-v" "${OUTPUT_DIR}:${OUTPUT_DIR}" )
+
+        ARGS=(
+          "--model=${INPUT_MODEL}"
+          "--extra-prompt=${INPUT_EXTRA_PROMPT}"
+          "--temperature=${INPUT_TEMPERATURE}"
+          "--top-p=${INPUT_TOP_P}"
+          "--diff-chunk-size=${INPUT_PULL_REQUEST_CHUNK_SIZE}"
+          "--diff-file=${DIFF_FILE}"
+          "--log-level=${INPUT_LOG_LEVEL}"
+        )
+
+        docker run --rm \
+          "${VOLUMES[@]}" \
+          -w "${GITHUB_WORKSPACE}" \
+          -e GEMINI_API_KEY \
+          -e GITHUB_TOKEN \
+          -e GITHUB_REPOSITORY \
+          -e GITHUB_PULL_REQUEST_NUMBER \
+          -e GIT_COMMIT_HASH \
+          -e LOCAL \
+          -e GITHUB_OUTPUT \
+          "$ACTION_IMAGE_TAG" \
+          "${ARGS[@]}"

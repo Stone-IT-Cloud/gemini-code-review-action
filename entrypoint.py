@@ -240,7 +240,6 @@ def _looks_like_daily_quota_exhausted(message: str) -> bool:
             "requests per day",
             "rpd",
             "day quota",
-            "quota exceeded for quota metric",
         )
     )
 
@@ -251,12 +250,13 @@ class NoQuotaAvailableError(RuntimeError):
 
 @dataclass
 class QuotaTracker:
-    """Track run-local usage and optionally estimate remaining quota.
+    """Track run-local usage and provide best-effort remaining-quota hints.
 
     Note: The Gemini API (AI Studio) does not reliably expose "remaining quota"
     counters to clients. This tracker logs:
     - actual per-request usage (when `usage_metadata` is provided)
-    - run-estimated remaining RPM/TPM/RPD if you provide limits via env vars
+    - run-estimated remaining RPM/TPM/RPD from *completed* requests if you
+      provide limits via env vars (in-flight/pending requests are not counted)
     """
 
     window_seconds: int = 60
@@ -264,6 +264,7 @@ class QuotaTracker:
     token_events: deque = field(default_factory=deque)  # (timestamp, total_tokens)
     requests_total: int = 0
     tokens_total: int = 0
+    last_pruned_at: float = 0.0
 
     quota_rpm: Optional[int] = None
     quota_tpm: Optional[int] = None
@@ -275,7 +276,13 @@ class QuotaTracker:
             raw = os.getenv(name)
             if raw is None or raw.strip() == "":
                 return None
-            return int(raw)
+            try:
+                return int(raw)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Invalid integer value for environment variable {name!r}: {raw!r}. "
+                    "Please set it to a valid integer (e.g., '60') or leave it unset."
+                ) from exc
 
         return QuotaTracker(
             quota_rpm=_parse_int("GEMINI_QUOTA_RPM"),
@@ -284,11 +291,15 @@ class QuotaTracker:
         )
 
     def _prune(self, now: float) -> None:
+        # Optimization: only prune if enough time has passed since last prune
+        if now - self.last_pruned_at < 1.0:
+            return
         cutoff = now - self.window_seconds
         while self.request_timestamps and self.request_timestamps[0] < cutoff:
             self.request_timestamps.popleft()
         while self.token_events and self.token_events[0][0] < cutoff:
             self.token_events.popleft()
+        self.last_pruned_at = now
 
     def note_request(self, now: float) -> None:
         self.requests_total += 1
@@ -344,9 +355,7 @@ class QuotaTracker:
         if remaining:
             usage_bits.append(
                 "run_estimated_remaining="
-                + ",".join(
-                    f"{k}={v}" for k, v in remaining.items() if k.endswith("_remaining")
-                )
+                + ",".join(f"{k}={v}" for k, v in remaining.items())
             )
         if not usage_bits:
             usage_bits.append("usage_metadata=<not provided by API>")
@@ -382,7 +391,8 @@ def _handle_api_error(
         logger.warning(f"Rate limit / quota exceeded details: {err_text}")
 
         if fail_fast_on_no_quota and _looks_like_daily_quota_exhausted(err_text):
-            raise NoQuotaAvailableError(err_text) from error
+            logger.error("Daily quota exhausted and fail-fast is enabled; aborting without retries.")
+            raise error
 
         if is_last_attempt:
             logger.error("Rate limit hit. No retries remaining.")
@@ -440,7 +450,14 @@ def get_review(config: AiReviewConfig) -> List[str]:
     fail_fast_on_no_quota = os.getenv("GEMINI_FAIL_FAST_ON_NO_QUOTA", "1") == "1"
 
     tracker = QuotaTracker.from_env()
-    if tracker.quota_rpm == 0 or tracker.quota_tpm == 0 or tracker.quota_rpd == 0:
+    if (
+        tracker.quota_rpm is not None
+        and tracker.quota_tpm is not None
+        and tracker.quota_rpd is not None
+        and tracker.quota_rpm == 0
+        and tracker.quota_tpm == 0
+        and tracker.quota_rpd == 0
+    ):
         raise NoQuotaAvailableError(
             "Configured quota is 0 (GEMINI_QUOTA_RPM/TPM/RPD). Refusing to start."
         )
@@ -473,9 +490,10 @@ def get_review(config: AiReviewConfig) -> List[str]:
                     "\n\nNow provide your review according to the earlier instructions."
                 )
 
-                tracker.note_request(time.time())
                 response = genai_model.generate_content("\n".join(prompt_parts))
-                last_request_at = time.time()
+                now = time.time()
+                tracker.note_request(now)
+                last_request_at = now
                 review_result = _extract_model_text(response)
                 tracker.log_after_response(
                     response,
@@ -539,11 +557,12 @@ def get_review(config: AiReviewConfig) -> List[str]:
             if since_last < min_request_interval:
                 time.sleep(min_request_interval - since_last)
 
-            tracker.note_request(time.time())
+            request_started_at = time.time()
             response = genai_model.generate_content(
                 summarize_prompt + "\n\n" + chunked_reviews_join
             )
-            last_request_at = time.time()
+            last_request_at = request_started_at
+            tracker.note_request(request_started_at)
             summarized_review = _extract_model_text(response)
             tracker.log_after_response(response, label="Gemini call success (summary)")
             if summarized_review:

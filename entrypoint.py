@@ -557,7 +557,6 @@ def get_review(config: AiReviewConfig) -> List[str]:
             if since_last < min_request_interval:
                 time.sleep(min_request_interval - since_last)
 
-            request_started_at = time.time()
             response = genai_model.generate_content(
                 summarize_prompt + "\n\n" + chunked_reviews_join
             )

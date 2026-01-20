@@ -561,8 +561,9 @@ def get_review(config: AiReviewConfig) -> List[str]:
             response = genai_model.generate_content(
                 summarize_prompt + "\n\n" + chunked_reviews_join
             )
-            last_request_at = request_started_at
-            tracker.note_request(request_started_at)
+            now = time.time()
+            tracker.note_request(now)
+            last_request_at = now
             summarized_review = _extract_model_text(response)
             tracker.log_after_response(response, label="Gemini call success (summary)")
             if summarized_review:

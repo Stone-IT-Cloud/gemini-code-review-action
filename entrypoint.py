@@ -281,7 +281,7 @@ class QuotaTracker:
             except ValueError as exc:
                 raise ValueError(
                     f"Invalid integer value for environment variable {name!r}: {raw!r}. "
-                    "Please set it to a valid integer (e.g., '60') or leave it unset."
+                    "Please set it to a valid positive integer or leave it unset."
                 ) from exc
 
         return QuotaTracker(
@@ -332,6 +332,17 @@ class QuotaTracker:
             rem["rpd_remaining"] = max(0, self.quota_rpd - self.requests_total)
             rem["rpd_limit"] = self.quota_rpd
         return rem
+
+    def has_all_quotas_set_to_zero(self) -> bool:
+        """Check if all quota limits are explicitly configured and set to zero."""
+        return (
+            self.quota_rpm is not None
+            and self.quota_tpm is not None
+            and self.quota_rpd is not None
+            and self.quota_rpm == 0
+            and self.quota_tpm == 0
+            and self.quota_rpd == 0
+        )
 
     def log_after_response(self, response, label: str) -> None:
         now = time.time()
@@ -450,14 +461,7 @@ def get_review(config: AiReviewConfig) -> List[str]:
     fail_fast_on_no_quota = os.getenv("GEMINI_FAIL_FAST_ON_NO_QUOTA", "1") == "1"
 
     tracker = QuotaTracker.from_env()
-    if (
-        tracker.quota_rpm is not None
-        and tracker.quota_tpm is not None
-        and tracker.quota_rpd is not None
-        and tracker.quota_rpm == 0
-        and tracker.quota_tpm == 0
-        and tracker.quota_rpd == 0
-    ):
+    if tracker.has_all_quotas_set_to_zero():
         raise NoQuotaAvailableError(
             "Configured quota is 0 (GEMINI_QUOTA_RPM/TPM/RPD). Refusing to start."
         )

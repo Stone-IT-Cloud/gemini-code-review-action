@@ -46,6 +46,11 @@ name: "Code Review by Gemini AI"
 
 on:
   pull_request:
+
+# Recommended: prevent parallel runs from competing for the same Gemini quota.
+concurrency:
+  group: gemini-review-${{ github.repository }}
+  cancel-in-progress: false
 env:
   GEMINI_MODEL: "gemini-2.5-flash"
 
@@ -70,7 +75,7 @@ jobs:
           git fetch origin "${{ env.PULL_REQUEST_BASE_REF }}"
           git checkout "${{ env.PULL_REQUEST_HEAD_REF }}"
           git diff "origin/${{ env.PULL_REQUEST_BASE_REF }}" > "${{ env.PR_DIFF_PATH }}"
-      - uses: Stone-IT-Cloud/gemini-code-review-action@1.0.3
+      - uses: Stone-IT-Cloud/gemini-code-review-action@1.1.4
         name: "Code Review by Gemini AI"
         id: review
         with:
@@ -93,11 +98,17 @@ jobs:
 ## How it works
 1. The workflow produces a unified diff file of the PR and provides it to the Action.
 2. The Action loads the diff, splits it into chunks according to `pull_request_chunk_size`.
-3. For each chunk, it sends:
-   - A review instruction prompt, then the diff chunk,
-   - Then a message containing the existing PR comments and reviews (via PyGithub),
-   - Then asks Gemini to produce the final feedback for that chunk.
-4. The Action summarizes the chunk-level feedback and posts a single review on the PR.
+3. For each chunk, it makes a single Gemini request containing:
+   - The review instruction prompt,
+   - The diff chunk,
+   - Existing PR comments (when available) as additional context.
+4. The Action optionally summarizes the chunk-level feedback and posts a single review on the PR.
+
+## Avoiding Gemini rate limits (recommended)
+Gemini quotas are shared across your project/account. If multiple workflows run in parallel using the same `GEMINI_API_KEY`, they can compete for the same quota.
+
+- Use workflow `concurrency` (example above) to serialize runs per repository.
+- If you still hit rate limits, reduce `pull_request_chunk_size` and/or avoid running reviews for every PR update (e.g., only on `pull_request_target` labels or `workflow_dispatch`).
 
 ## Permissions and security
 - Uses the default `GITHUB_TOKEN` to read PR metadata and post reviews.

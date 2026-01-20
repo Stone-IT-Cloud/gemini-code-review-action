@@ -11,8 +11,9 @@
 #  limitations under the License.
 import json
 import os
+import random
 import time
-from typing import List, TypedDict
+from typing import List, Optional, TypedDict
 
 import click
 import google.generativeai as genai
@@ -60,7 +61,7 @@ def check_required_env_vars():
         "GIT_COMMIT_HASH",
     ]
     # if running locally, we only check gemini api key
-    if os.getenv("LOCAL") is True:
+    if os.getenv("LOCAL") is not None:
         required_env_vars = [
             "GEMINI_API_KEY",
         ]
@@ -184,23 +185,53 @@ def chunk_string(input_string: str, chunk_size) -> List[str]:
     return chunked_inputs
 
 
-def handle_api_error(error, attempt, max_retries=3, initial_wait=15):
-    """Handle API errors with exponential backoff"""
+def _extract_model_text(response) -> Optional[str]:
+    """Best-effort extraction of text from a Gemini SDK response."""
+    if response is None:
+        return None
+    return getattr(response, "text", None)
+
+
+def _sleep_with_jitter(seconds: float) -> None:
+    """Sleep with a small random jitter to avoid synchronized retries."""
+    # Jitter in [0, 1.0) seconds, capped so it never dominates the delay.
+    jitter = min(1.0, random.random())
+    time.sleep(max(0.0, seconds + jitter))
+
+
+def _handle_api_error(
+    error,
+    attempt: int,
+    max_attempts: int,
+    initial_wait: float,
+    max_wait: float,
+) -> bool:
+    """Handle API errors with exponential backoff + jitter.
+
+    Returns True if the caller should retry (and we already waited), else False.
+    """
+    is_last_attempt = (attempt + 1) >= max_attempts
+
     if isinstance(error, google_exceptions.ResourceExhausted):
-        # Rate limit error
-        if attempt < max_retries:
-            wait_time = initial_wait * (2**attempt)  # Exponential backoff
-            logger.warning(
-                f"Rate limit hit. Waiting {wait_time} seconds before retry..."
-            )
-            time.sleep(wait_time)
-            return True
-    elif isinstance(error, google_exceptions.DeadlineExceeded):
+        # Rate limit / quota exceeded.
+        if is_last_attempt:
+            logger.error("Rate limit hit. No retries remaining.")
+            return False
+        wait_time = min(max_wait, initial_wait * (2**attempt))
+        logger.warning(f"Rate limit hit. Waiting {wait_time:.0f}s before retry...")
+        _sleep_with_jitter(wait_time)
+        return True
+
+    if isinstance(error, google_exceptions.DeadlineExceeded):
         logger.error("API request timed out")
-    elif isinstance(error, google_exceptions.InvalidArgument):
+        return not is_last_attempt
+
+    if isinstance(error, google_exceptions.InvalidArgument):
         logger.error(f"Invalid API request: {str(error)}")
-    else:
-        logger.error(f"Unexpected API error: {str(error)}")
+        return False
+
+    # Default: do not spin forever on unexpected errors.
+    logger.error(f"Unexpected API error: {str(error)}")
     return False
 
 
@@ -230,37 +261,44 @@ def get_review(config: AiReviewConfig) -> List[str]:
         generation_config=generation_config,
         system_instruction=extra_prompt,
     )
-    # Get summary by chunk
+
+    # Throttling controls (defaults tuned to avoid bursty request patterns in CI).
+    max_attempts = int(os.getenv("GEMINI_MAX_ATTEMPTS", "6"))
+    initial_wait = float(os.getenv("GEMINI_INITIAL_BACKOFF_SECONDS", "15"))
+    max_wait = float(os.getenv("GEMINI_MAX_BACKOFF_SECONDS", "240"))
+    min_request_interval = float(os.getenv("GEMINI_MIN_REQUEST_INTERVAL_SECONDS", "6"))
+
+    # Get review by chunk (1 request per chunk to reduce RPM/TPM pressure).
     chunked_reviews = []
-    for chunked_diff in chunked_diff_list:
-        max_attempts = 3
+    last_request_at = 0.0
+    for idx, chunked_diff in enumerate(chunked_diff_list, start=1):
+        # Enforce a minimum spacing between requests across chunks.
+        since_last = time.time() - last_request_at
+        if since_last < min_request_interval:
+            time.sleep(min_request_interval - since_last)
+
         for attempt in range(max_attempts):
             try:
-                convo = genai_model.start_chat(
-                    history=[
-                        {"role": "user", "parts": [review_prompt]},
-                        {"role": "model", "parts": ["Ok"]},
-                    ]
-                )
-                # 1) Send the diff chunk
-                _ = convo.send_message(chunked_diff)
+                prompt_parts: List[str] = [
+                    review_prompt.strip(),
+                    f"\n\n[Pull request diff chunk {idx}/{len(chunked_diff_list)}]\n{chunked_diff}",
+                ]
 
-                # 2) Send PR comments context (if any), instructing the model to take them into account
+                # Include PR comments only if present; this can be large, so keep it optional.
                 if comments_text.strip():
-                    comments_prompt = (
-                        "These are the comments already made in this PR by reviewers "
-                        "and participants. Please take them into consideration when "
-                        "performing your review.\n\n" + comments_text
+                    prompt_parts.append(
+                        "\n\n[Existing PR comments context]\n"
+                        "Take these into consideration when performing your review.\n\n"
+                        + comments_text
                     )
-                    _ = convo.send_message(comments_prompt)
 
-                # 3) Request the actual output from the AI now that context is set
-                final_instruction = (
-                    "Now, considering the pull request diff and the PR comments above, "
-                    "provide your review according to the earlier instructions."
+                prompt_parts.append(
+                    "\n\nNow provide your review according to the earlier instructions."
                 )
-                final_response = convo.send_message(final_instruction)
-                review_result = getattr(convo.last, "text", final_response.text)
+
+                response = genai_model.generate_content("\n".join(prompt_parts))
+                last_request_at = time.time()
+                review_result = _extract_model_text(response)
             except (
                 google_exceptions.ResourceExhausted,
                 google_exceptions.DeadlineExceeded,
@@ -268,42 +306,63 @@ def get_review(config: AiReviewConfig) -> List[str]:
                 google_exceptions.GoogleAPICallError,
                 google_exceptions.RetryError,
             ) as e:
-                logger.error(f"Attempt {attempt + 1}/{max_attempts} failed")
-                should_retry = handle_api_error(
-                    e, attempt=attempt, max_retries=max_attempts
+                logger.error(
+                    f"Chunk {idx}/{len(chunked_diff_list)} attempt {attempt + 1}/{max_attempts} failed"
                 )
-                if not should_retry or attempt == max_attempts - 1:
-                    review_result = None
-                    break
-                continue
+                should_retry = _handle_api_error(
+                    e,
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    initial_wait=initial_wait,
+                    max_wait=max_wait,
+                )
+                if should_retry:
+                    continue
+                review_result = None
 
-            if review_result is None:
-                raise ValueError("Failed to get model response")
+            if not review_result:
+                # Don't crash the whole run; keep going so we can at least attempt other chunks.
+                logger.error(
+                    f"Failed to get model response for chunk {idx}/{len(chunked_diff_list)}"
+                )
+                break
             logger.debug(f"Response AI: {review_result}")
             chunked_reviews.append(review_result)
             break
-        time.sleep(10)  # wating for 10 seconds to avoid rate limit
+        # Additional spacing to avoid bursts across chunks.
+        time.sleep(min_request_interval)
     # If the chunked reviews are only one, return it
 
     if len(chunked_reviews) == 1:
         return chunked_reviews, chunked_reviews[0]
 
     if len(chunked_reviews) == 0:
-        summarize_prompt = (
-            "Say that you didn't find any relevant changes to comment on any file"
+        # Avoid another API call; also avoids guaranteed failure if we're already rate-limited.
+        return (
+            [],
+            (
+                "Unable to generate review (Gemini API rate limit/quota exceeded). "
+                "Please rerun later or reduce request volume."
+            ),
         )
-    else:
-        summarize_prompt = get_summarize_prompt()
+
+    summarize_prompt = get_summarize_prompt()
 
     chunked_reviews_join = "\n".join(chunked_reviews)
-    summary_response = None
-    max_attempts = 3
+    summarized_review: Optional[str] = None
     for attempt in range(max_attempts):
         try:
-            convo = genai_model.start_chat(history=[])
-            summary_response = convo.send_message(
+            since_last = time.time() - last_request_at
+            if since_last < min_request_interval:
+                time.sleep(min_request_interval - since_last)
+
+            response = genai_model.generate_content(
                 summarize_prompt + "\n\n" + chunked_reviews_join
             )
+            last_request_at = time.time()
+            summarized_review = _extract_model_text(response)
+            if summarized_review:
+                break
         except (
             google_exceptions.ResourceExhausted,
             google_exceptions.DeadlineExceeded,
@@ -311,15 +370,21 @@ def get_review(config: AiReviewConfig) -> List[str]:
             google_exceptions.GoogleAPICallError,
             google_exceptions.RetryError,
         ) as e:
-            logger.error(f"Attempt {attempt + 1}/{max_attempts} failed")
-            should_retry = handle_api_error(
-                e, attempt=attempt, max_retries=max_attempts
+            logger.error(f"Summary attempt {attempt + 1}/{max_attempts} failed")
+            should_retry = _handle_api_error(
+                e,
+                attempt=attempt,
+                max_attempts=max_attempts,
+                initial_wait=initial_wait,
+                max_wait=max_wait,
             )
-            if not should_retry or attempt == max_attempts - 1:
-                summary_response = None
+            if not should_retry:
                 break
-            continue
-    summarized_review = getattr(convo.last, "text", summary_response.text)
+
+    if not summarized_review:
+        summarized_review = (
+            "Unable to generate summary (Gemini API rate limit/quota exceeded)."
+        )
     logger.debug(f"Response AI: {summarized_review}")
     return chunked_reviews, summarized_review
 

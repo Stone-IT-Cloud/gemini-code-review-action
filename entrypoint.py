@@ -265,6 +265,7 @@ class QuotaTracker:
     requests_total: int = 0
     tokens_total: int = 0
     last_pruned_at: float = 0.0
+    prune_interval_seconds: float = 1.0  # Only prune if this much time has elapsed
 
     quota_rpm: Optional[int] = None
     quota_tpm: Optional[int] = None
@@ -277,11 +278,14 @@ class QuotaTracker:
             if raw is None or raw.strip() == "":
                 return None
             try:
-                return int(raw)
+                value = int(raw)
+                if value < 0:
+                    raise ValueError(f"Value must be non-negative, got {value}")
+                return value
             except ValueError as exc:
                 raise ValueError(
-                    f"Invalid integer value for environment variable {name!r}: {raw!r}. "
-                    "Please set it to a valid positive integer or leave it unset."
+                    f"Invalid value for environment variable {name!r}: {raw!r}. "
+                    "Please set it to a valid non-negative integer or leave it unset."
                 ) from exc
 
         return QuotaTracker(
@@ -292,7 +296,7 @@ class QuotaTracker:
 
     def _prune(self, now: float) -> None:
         # Optimization: only prune if enough time has passed since last prune
-        if now - self.last_pruned_at < 1.0:
+        if now - self.last_pruned_at < self.prune_interval_seconds:
             return
         cutoff = now - self.window_seconds
         while self.request_timestamps and self.request_timestamps[0] < cutoff:

@@ -25,6 +25,24 @@ If the diff exceeds the model's context window, the Action splits it into chunks
 - `pull_request_chunk_size` (optional): Diff chunk size to fit model limits.
 - `log_level` (optional): Logging level (e.g., `INFO`, `DEBUG`).
 
+### Environment Variables for Quota Management
+
+The following optional environment variables can be set to configure quota tracking and fail-fast behavior:
+
+- `GEMINI_FAIL_FAST_ON_NO_QUOTA` (default: `1`): When set to `1`, the action will immediately fail when daily quota exhaustion is detected, rather than continuing to retry. Set to `0` to disable fail-fast.
+- `GEMINI_QUOTA_RPM` (optional): Your Gemini API requests-per-minute quota limit. When provided, the action logs estimated remaining RPM after each request.
+- `GEMINI_QUOTA_TPM` (optional): Your Gemini API tokens-per-minute quota limit. When provided, the action logs estimated remaining TPM after each request.
+- `GEMINI_QUOTA_RPD` (optional): Your Gemini API requests-per-day quota limit. When provided, the action logs estimated remaining RPD after each request.
+
+**Example with quota tracking:**
+```yaml
+env:
+  GEMINI_FAIL_FAST_ON_NO_QUOTA: "1"
+  GEMINI_QUOTA_RPM: "60"
+  GEMINI_QUOTA_TPM: "32000"
+  GEMINI_QUOTA_RPD: "1500"
+```
+
 ## Features
 - Splits large diffs and aggregates per-chunk analysis.
 - Summarizes into a single review comment posted to the PR.
@@ -46,6 +64,11 @@ name: "Code Review by Gemini AI"
 
 on:
   pull_request:
+
+# This configuration limits concurrency per pull request, allowing different PRs in the same repository to run in parallel.
+concurrency:
+  group: gemini-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 env:
   GEMINI_MODEL: "gemini-2.5-flash"
 
@@ -57,6 +80,11 @@ jobs:
       pull-requests: write
     env:
       PR_DIFF_PATH: pull-request.diff
+      # Optional: Configure quota tracking and fail-fast behavior
+      GEMINI_FAIL_FAST_ON_NO_QUOTA: "1"
+      GEMINI_QUOTA_RPM: "60"
+      GEMINI_QUOTA_TPM: "32000"
+      GEMINI_QUOTA_RPD: "1500"
     steps:
       - uses: actions/checkout@v4
       - name: "Get diff of the pull request"
@@ -70,7 +98,7 @@ jobs:
           git fetch origin "${{ env.PULL_REQUEST_BASE_REF }}"
           git checkout "${{ env.PULL_REQUEST_HEAD_REF }}"
           git diff "origin/${{ env.PULL_REQUEST_BASE_REF }}" > "${{ env.PR_DIFF_PATH }}"
-      - uses: Stone-IT-Cloud/gemini-code-review-action@1.0.3
+      - uses: Stone-IT-Cloud/gemini-code-review-action@1.1.4
         name: "Code Review by Gemini AI"
         id: review
         with:
@@ -93,11 +121,17 @@ jobs:
 ## How it works
 1. The workflow produces a unified diff file of the PR and provides it to the Action.
 2. The Action loads the diff, splits it into chunks according to `pull_request_chunk_size`.
-3. For each chunk, it sends:
-   - A review instruction prompt, then the diff chunk,
-   - Then a message containing the existing PR comments and reviews (via PyGithub),
-   - Then asks Gemini to produce the final feedback for that chunk.
-4. The Action summarizes the chunk-level feedback and posts a single review on the PR.
+3. For each chunk, it makes a single Gemini request containing:
+   - The review instruction prompt,
+   - The diff chunk,
+   - Existing PR comments (when available) as additional context.
+4. If there are multiple chunks, the Action automatically summarizes the chunk-level feedback and posts a single review on the PR.
+
+## Avoiding Gemini rate limits (recommended)
+Gemini quotas are shared across your project/account. If multiple workflows run in parallel using the same `GEMINI_API_KEY`, they can compete for the same quota.
+
+- Use workflow `concurrency` (example above) to serialize runs per pull request (avoid overlapping runs for the same PR).
+- If you still hit rate limits, reduce `pull_request_chunk_size` and/or avoid running reviews for every PR update (e.g., only when specific labels are added using an `if:` condition such as `if: contains(github.event.pull_request.labels.*.name, 'needs-review')`, or by triggering the workflow manually via `workflow_dispatch`).
 
 ## Permissions and security
 - Uses the default `GITHUB_TOKEN` to read PR metadata and post reviews.

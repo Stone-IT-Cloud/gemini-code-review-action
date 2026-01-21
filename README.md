@@ -65,10 +65,10 @@ name: "Code Review by Gemini AI"
 on:
   pull_request:
 
-# Recommended: prevent parallel runs from competing for the same Gemini quota.
+# This configuration limits concurrency per pull request rather than for the whole repository.
 concurrency:
-  group: gemini-review-${{ github.repository }}
-  cancel-in-progress: false
+  group: gemini-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 env:
   GEMINI_MODEL: "gemini-2.5-flash"
 
@@ -120,13 +120,13 @@ jobs:
    - The review instruction prompt,
    - The diff chunk,
    - Existing PR comments (when available) as additional context.
-4. The Action optionally summarizes the chunk-level feedback and posts a single review on the PR.
+4. If there are multiple chunks, the Action automatically summarizes the chunk-level feedback and posts a single review on the PR.
 
 ## Avoiding Gemini rate limits (recommended)
 Gemini quotas are shared across your project/account. If multiple workflows run in parallel using the same `GEMINI_API_KEY`, they can compete for the same quota.
 
 - Use workflow `concurrency` (example above) to serialize runs per repository.
-- If you still hit rate limits, reduce `pull_request_chunk_size` and/or avoid running reviews for every PR update (e.g., only on `pull_request_target` labels or `workflow_dispatch`).
+- If you still hit rate limits, reduce `pull_request_chunk_size` and/or avoid running reviews for every PR update (e.g., only when specific labels are added using an `if:` condition such as `if: contains(github.event.pull_request.labels.*.name, 'needs-review')`, or by triggering the workflow manually via `workflow_dispatch`).
 
 ## Permissions and security
 - Uses the default `GITHUB_TOKEN` to read PR metadata and post reviews.

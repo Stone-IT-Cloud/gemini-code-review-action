@@ -80,6 +80,11 @@ jobs:
       pull-requests: write
     env:
       PR_DIFF_PATH: pull-request.diff
+      # Optional: Configure quota tracking and fail-fast behavior
+      GEMINI_FAIL_FAST_ON_NO_QUOTA: "1"
+      GEMINI_QUOTA_RPM: "60"
+      GEMINI_QUOTA_TPM: "32000"
+      GEMINI_QUOTA_RPD: "1500"
     steps:
       - uses: actions/checkout@v4
       - name: "Get diff of the pull request"

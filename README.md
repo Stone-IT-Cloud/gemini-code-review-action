@@ -130,7 +130,7 @@ jobs:
 ## Avoiding Gemini rate limits (recommended)
 Gemini quotas are shared across your project/account. If multiple workflows run in parallel using the same `GEMINI_API_KEY`, they can compete for the same quota.
 
-- Use workflow `concurrency` (example above) to serialize runs per repository.
+- Use workflow `concurrency` (example above) to serialize runs per pull request (avoid overlapping runs for the same PR).
 - If you still hit rate limits, reduce `pull_request_chunk_size` and/or avoid running reviews for every PR update (e.g., only when specific labels are added using an `if:` condition such as `if: contains(github.event.pull_request.labels.*.name, 'needs-review')`, or by triggering the workflow manually via `workflow_dispatch`).
 
 ## Permissions and security

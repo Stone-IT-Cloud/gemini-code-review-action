@@ -65,7 +65,7 @@ name: "Code Review by Gemini AI"
 on:
   pull_request:
 
-# This configuration limits concurrency per pull request rather than for the whole repository.
+# This configuration limits concurrency per pull request, allowing different PRs in the same repository to run in parallel.
 concurrency:
   group: gemini-review-${{ github.repository }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true

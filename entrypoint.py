@@ -279,14 +279,17 @@ class QuotaTracker:
                 return None
             try:
                 value = int(raw)
-                if value < 0:
-                    raise ValueError(f"Value must be non-negative, got {value}")
-                return value
             except ValueError as exc:
                 raise ValueError(
-                    f"Invalid value for environment variable {name!r}: {raw!r}. "
-                    "Please set it to a valid non-negative integer or leave it unset."
+                    f"Invalid integer value for environment variable {name!r}: {raw!r}. "
+                    "Please set it to a valid integer (e.g., '60') or leave it unset."
                 ) from exc
+            if value < 0:
+                raise ValueError(
+                    f"Invalid non-negative value for environment variable {name!r}: {value!r}. "
+                    "Please set it to a non-negative integer or leave it unset."
+                )
+            return value
 
         return QuotaTracker(
             quota_rpm=_parse_int("GEMINI_QUOTA_RPM"),

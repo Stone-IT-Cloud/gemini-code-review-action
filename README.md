@@ -136,6 +136,8 @@ Gemini quotas are shared across your project/account. If multiple workflows run 
 ## Permissions and security
 - Uses the default `GITHUB_TOKEN` to read PR metadata and post reviews.
 - Requires `pull-requests: write` to create a PR review.
+- Optional but recommended: `issues: read` to allow fetching general PR discussion comments.
+- If `issues: read` or other permissions are unavailable, the Action will skip the unavailable comment types and proceed with the rest.
 - Keep your `GEMINI_API_KEY` in repository secrets; never commit it.
 
 ## Local testing

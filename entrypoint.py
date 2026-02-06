@@ -128,13 +128,41 @@ def get_all_pr_comments_text(
         pr = repo.get_pull(pull_request_number)
 
         # Issue comments (general discussion on the PR as an issue)
-        issue_comments = list(pr.as_issue().get_comments())
+        try:
+            issue_comments = list(pr.as_issue().get_comments())
+        except GithubException as exc:
+            # Common when GITHUB_TOKEN lacks `issues: read` permission on some repos
+            if getattr(exc, "status", None) == 403:
+                logger.warning(
+                    "Skipping issue comments due to insufficient permissions (issues: read)."
+                )
+                issue_comments = []
+            else:
+                raise
 
         # Review comments (inline file comments)
-        review_comments = list(pr.get_comments())
+        try:
+            review_comments = list(pr.get_comments())
+        except GithubException as exc:
+            if getattr(exc, "status", None) == 403:
+                logger.warning(
+                    "Skipping PR review comments due to insufficient permissions."
+                )
+                review_comments = []
+            else:
+                raise
 
         # Reviews (summary reviews, states like APPROVED/CHANGES_REQUESTED)
-        reviews = list(pr.get_reviews())
+        try:
+            reviews = list(pr.get_reviews())
+        except GithubException as exc:
+            if getattr(exc, "status", None) == 403:
+                logger.warning(
+                    "Skipping PR reviews list due to insufficient permissions."
+                )
+                reviews = []
+            else:
+                raise
 
         lines: List[str] = []
         if issue_comments:

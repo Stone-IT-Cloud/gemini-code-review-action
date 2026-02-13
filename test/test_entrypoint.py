@@ -11,8 +11,9 @@
 #  limitations under the License.
 import json
 
-from entrypoint import format_review_comment, get_review_prompt
-from review_parser import REVIEW_SYSTEM_PROMPT
+from src.review_formatter import format_review_comment
+from src.prompts import get_review_prompt
+from src.review_parser import REVIEW_SYSTEM_PROMPT
 
 
 class TestGetReviewPrompt:

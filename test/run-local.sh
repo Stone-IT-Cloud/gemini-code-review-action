@@ -1,30 +1,25 @@
 #!/bin/bash
+# Run the Gemini code review locally without Docker.
+#
+# Prerequisites:
+#   pip install -r requirements.txt
+#   export GEMINI_API_KEY="your-api-key"
+#
+# Usage:
+#   bash test/run-local.sh [path-to-diff]
+#
+# If no diff path is provided, the bundled test/long-diff.txt is used.
 
-# Build Docker image
-# docker build -t gemini-code-review .
+set -euo pipefail
 
-# Read test diff
-DIFF_CONTENT=$(cat test/long-diff.txt)
+DIFF_FILE="${1:-test/long-diff.txt}"
 
-mkdir -p test/fixtures
-echo "$DIFF_CONTENT" >test/fixtures/test.diff
+export LOCAL=1
 
-# Create temp dir for outputs
-mkdir -p test/outputs
-
-# Run action locally
-docker run \
-    -e GEMINI_API_KEY="${GEMINI_API_KEY}" \
-    -e GITHUB_TOKEN="your-github-token" \
-    -e GITHUB_REPOSITORY="owner/repo" \
-    -e GITHUB_PULL_REQUEST_NUMBER="1" \
-    -e GIT_COMMIT_HASH="abc123" \
-    -v $(pwd)/test/outputs:/outputs \
-    -v $(pwd)/test/fixtures/test.diff:/tmp/pr.diff \
-    gemini-code-review \
-    --model="gemini-1.5-pro-latest" \
-    --extra-prompt="Please write your review in English as an experienced nodejs and typescript developer." \
+python -m src.main \
+    --diff-file="${DIFF_FILE}" \
+    --model="gemini-2.5-flash" \
+    --extra-prompt="Please write your review in English as an experienced software engineer." \
     --temperature=0.7 \
-    --max-tokens=250 \
     --top-p=1 \
     --diff-chunk-size=2000000

@@ -9,16 +9,3 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
-FROM python:3.12-slim
-
-WORKDIR /app
-
-# Install python packages
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the application source
-COPY src/ ./src/
-
-ENTRYPOINT ["python", "-m", "src.main"]

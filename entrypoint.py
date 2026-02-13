@@ -25,7 +25,7 @@ from github.GithubException import GithubException
 from google.api_core import exceptions as google_exceptions
 from loguru import logger
 
-from review_parser import REVIEW_SYSTEM_PROMPT, _strip_markdown_fences, parse_review_response
+from review_parser import REVIEW_SYSTEM_PROMPT, parse_review_response, strip_markdown_fences
 
 
 def write_github_output(name: str, value: str) -> None:
@@ -620,7 +620,7 @@ def format_review_comment(summarized_review: str, chunked_reviews: List[str]) ->
             any_parsed = True
         else:
             # Check if it was valid JSON that just had no items (e.g. []).
-            cleaned = _strip_markdown_fences(chunk_text) if chunk_text else ""
+            cleaned = strip_markdown_fences(chunk_text) if chunk_text else ""
             try:
                 json.loads(cleaned)
                 any_parsed = True
@@ -634,7 +634,7 @@ def format_review_comment(summarized_review: str, chunked_reviews: List[str]) ->
             file_name = item["file"]
             line_num = item["line"]
             comment = item["comment"]
-            loc = f"{file_name}:{line_num}" if line_num else file_name
+            loc = f"{file_name}:{line_num}" if line_num != 0 else file_name
             lines.append(f"**[{severity}]** `{loc}`: {comment}")
         structured_body = "\n\n".join(lines)
     elif any_parsed:

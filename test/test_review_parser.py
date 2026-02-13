@@ -15,36 +15,36 @@ import pytest
 
 from review_parser import (
     REVIEW_SYSTEM_PROMPT,
-    _strip_markdown_fences,
     _validate_review_item,
     parse_review_response,
+    strip_markdown_fences,
 )
 
 
 # ---------------------------------------------------------------------------
-# _strip_markdown_fences
+# strip_markdown_fences
 # ---------------------------------------------------------------------------
 
 class TestStripMarkdownFences:
     def test_no_fences(self):
         raw = '[{"file": "a.py", "line": 1, "severity": "minor", "comment": "ok"}]'
-        assert _strip_markdown_fences(raw) == raw
+        assert strip_markdown_fences(raw) == raw
 
     def test_json_fences(self):
         raw = '```json\n[{"file": "a.py"}]\n```'
-        assert _strip_markdown_fences(raw) == '[{"file": "a.py"}]'
+        assert strip_markdown_fences(raw) == '[{"file": "a.py"}]'
 
     def test_plain_fences(self):
         raw = '```\n[{"file": "a.py"}]\n```'
-        assert _strip_markdown_fences(raw) == '[{"file": "a.py"}]'
+        assert strip_markdown_fences(raw) == '[{"file": "a.py"}]'
 
     def test_fences_with_surrounding_whitespace(self):
         raw = '  \n```json\n  [{"file": "a.py"}]  \n```  \n'
-        assert _strip_markdown_fences(raw) == '[{"file": "a.py"}]'
+        assert strip_markdown_fences(raw) == '[{"file": "a.py"}]'
 
     def test_no_fences_returns_stripped(self):
         raw = '  [{"file": "a.py"}]  '
-        assert _strip_markdown_fences(raw) == '[{"file": "a.py"}]'
+        assert strip_markdown_fences(raw) == '[{"file": "a.py"}]'
 
 
 # ---------------------------------------------------------------------------

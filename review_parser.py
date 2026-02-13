@@ -35,7 +35,7 @@ REVIEW_SYSTEM_PROMPT = (
 )
 
 
-def _strip_markdown_fences(text: str) -> str:
+def strip_markdown_fences(text: str) -> str:
     """Remove markdown code fences (e.g. ```json ... ```) wrapping JSON content."""
     stripped = text.strip()
     pattern = r"^```(?:json)?\s*\n?(.*?)\n?\s*```$"
@@ -97,7 +97,7 @@ def parse_review_response(text: Optional[str]) -> List[dict]:
         logger.warning("Empty response from model; returning no review items.")
         return []
 
-    cleaned = _strip_markdown_fences(text)
+    cleaned = strip_markdown_fences(text)
 
     try:
         parsed = json.loads(cleaned)

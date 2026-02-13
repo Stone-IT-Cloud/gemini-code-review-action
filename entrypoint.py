@@ -25,6 +25,8 @@ from github.GithubException import GithubException
 from google.api_core import exceptions as google_exceptions
 from loguru import logger
 
+from review_parser import REVIEW_SYSTEM_PROMPT, _strip_markdown_fences, parse_review_response
+
 
 def write_github_output(name: str, value: str) -> None:
     """Write an output for GitHub Actions.
@@ -74,17 +76,17 @@ def check_required_env_vars():
 
 
 def get_review_prompt(extra_prompt: str = "") -> str:
-    """Get a prompt template"""
-    template = f"""
-    {extra_prompt}.
-    This is a pull request or part of a pull request if the pull request is very large.
-    Suppose you review this PR as an excellent software engineer and an excellent security engineer.
-    Can you tell me the issues with differences in a pull request and provide suggestions to improve it?
-    You can provide a review summary and issue comments per file if any major issues are found.
-    Always include the name of the file that is citing the improvement or problem.
-    In the next messages I will be sending you the difference between the GitHub file codes, okay?
-    """
-    return template
+    """Get a prompt template for structured JSON code review."""
+    parts = [REVIEW_SYSTEM_PROMPT]
+    if extra_prompt.strip():
+        parts.append(extra_prompt.strip())
+    parts.append(
+        "This is a pull request or part of a pull request if the pull request is very large.\n"
+        "Suppose you review this PR as an excellent software engineer and an excellent security engineer.\n"
+        "Analyze the differences and provide review comments for any major issues found.\n"
+        "In the next messages I will be sending you the difference between the GitHub file codes, okay?"
+    )
+    return "\n\n".join(parts)
 
 
 def get_summarize_prompt() -> str:
@@ -457,7 +459,7 @@ def get_review(config: AiReviewConfig) -> List[str]:
     genai_model = genai.GenerativeModel(
         model_name=model,
         generation_config=generation_config,
-        system_instruction=extra_prompt,
+        system_instruction=review_prompt,
     )
 
     # Throttling controls (defaults tuned to avoid bursty request patterns in CI).
@@ -608,15 +610,49 @@ def get_review(config: AiReviewConfig) -> List[str]:
 
 
 def format_review_comment(summarized_review: str, chunked_reviews: List[str]) -> str:
-    """Format reviews"""
-    if len(chunked_reviews) == 1:
-        return summarized_review
-    unioned_reviews = "\n".join(chunked_reviews)
-    review = f"""<details>
-    <summary>{summarized_review}</summary>
-    {unioned_reviews}
-    </details>
-    """
+    """Format reviews, parsing structured JSON when possible."""
+    all_items: list = []
+    any_parsed = False
+    for chunk_text in chunked_reviews:
+        parsed = parse_review_response(chunk_text)
+        if parsed:
+            all_items.extend(parsed)
+            any_parsed = True
+        else:
+            # Check if it was valid JSON that just had no items (e.g. []).
+            cleaned = _strip_markdown_fences(chunk_text) if chunk_text else ""
+            try:
+                json.loads(cleaned)
+                any_parsed = True
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    if all_items:
+        lines: List[str] = []
+        for item in all_items:
+            severity = item["severity"].upper()
+            file_name = item["file"]
+            line_num = item["line"]
+            comment = item["comment"]
+            loc = f"{file_name}:{line_num}" if line_num else file_name
+            lines.append(f"**[{severity}]** `{loc}`: {comment}")
+        structured_body = "\n\n".join(lines)
+    elif any_parsed:
+        # All chunks were valid JSON but had no review items.
+        structured_body = ""
+    else:
+        # Fallback: use raw text if JSON parsing yielded nothing.
+        structured_body = "\n".join(chunked_reviews) if chunked_reviews else ""
+
+    if len(chunked_reviews) <= 1:
+        return structured_body or summarized_review
+
+    review = (
+        f"<details>\n"
+        f"    <summary>{summarized_review}</summary>\n"
+        f"    {structured_body}\n"
+        f"    </details>"
+    )
     return review
 
 

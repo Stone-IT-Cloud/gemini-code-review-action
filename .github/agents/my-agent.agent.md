@@ -5,7 +5,7 @@
 # For format details, see: https://gh.io/customagents/config
 
 name: python ml
-description:
+description: python machine learning coding agent
 ---
 
 # Python ML Agent

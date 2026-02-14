@@ -76,6 +76,8 @@ class TestReviewLevelCLI:
                 del os.environ["GEMINI_API_KEY"]
             if "LOCAL" in os.environ:
                 del os.environ["LOCAL"]
+            if "REVIEW_LEVEL" in os.environ:
+                del os.environ["REVIEW_LEVEL"]
 
     @patch("src.main.genai")
     @patch("src.main.get_review")

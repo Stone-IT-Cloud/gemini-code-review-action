@@ -85,8 +85,7 @@ To reduce review noise, the action classifies comments by severity and allows yo
 # Option 1: Use CLI parameter
 python -m src.main \
     --diff-file=/tmp/my-changes.diff \
-    --review-level=CRITICAL \
-    # Other parameters...
+    --review-level=CRITICAL
 
 # Option 2: Use environment variable
 export REVIEW_LEVEL=CRITICAL

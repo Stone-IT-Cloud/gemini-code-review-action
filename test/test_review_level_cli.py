@@ -236,3 +236,46 @@ class TestReviewLevelCLI:
             for key in ["GEMINI_API_KEY", "LOCAL"]:
                 if key in os.environ:
                     del os.environ[key]
+
+    def test_invalid_review_level_rejected(self):
+        """Test that Click rejects invalid --review-level values."""
+        # Set required environment variables
+        os.environ["GEMINI_API_KEY"] = "test-key"
+        os.environ["LOCAL"] = "1"
+
+        # Create a test diff file using tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as f:
+            test_diff_file = f.name
+            f.write("diff --git a/test.py b/test.py\n")
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(
+                main,
+                [
+                    "--diff-file",
+                    test_diff_file,
+                    "--review-level",
+                    "INVALID",
+                    "--model",
+                    "test-model",
+                ],
+            )
+
+            # Verify the command failed with non-zero exit code
+            assert result.exit_code != 0, "Command should fail with invalid review level"
+
+            # Verify error message contains expected text
+            assert "Invalid value for '--review-level'" in result.output
+            assert "INVALID" in result.output
+            assert "TRIVIAL" in result.output
+            assert "IMPORTANT" in result.output
+            assert "CRITICAL" in result.output
+
+        finally:
+            # Cleanup
+            if os.path.exists(test_diff_file):
+                os.remove(test_diff_file)
+            for key in ["GEMINI_API_KEY", "LOCAL"]:
+                if key in os.environ:
+                    del os.environ[key]

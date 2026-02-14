@@ -12,7 +12,7 @@
 from typing import List, Optional
 
 
-def chunk_string(input_string: str, chunk_size) -> List[str]:
+def chunk_string(input_string: str, chunk_size: int) -> List[str]:
     """Chunk a string into pieces of at most *chunk_size* characters."""
     chunked_inputs = []
     for i in range(0, len(input_string), chunk_size):

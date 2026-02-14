@@ -10,7 +10,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 import os
-from typing import List, TypedDict
+from typing import NotRequired, TypedDict
 
 
 class AiReviewConfig(TypedDict):
@@ -19,10 +19,10 @@ class AiReviewConfig(TypedDict):
     extra_prompt: str
     prompt_chunk_size: int
     comments_text: str
-    temperature: float
-    top_p: float
-    top_k: int
-    max_output_tokens: int
+    temperature: NotRequired[float]
+    top_p: NotRequired[float]
+    top_k: NotRequired[int]
+    max_output_tokens: NotRequired[int]
 
 
 def check_required_env_vars():
@@ -41,5 +41,6 @@ def check_required_env_vars():
         ]
 
     for required_env_var in required_env_vars:
-        if os.getenv(required_env_var) is None:
-            raise ValueError(f"{required_env_var} is not set")
+        value = os.getenv(required_env_var)
+        if value is None or not value.strip():
+            raise ValueError(f"{required_env_var} is not set or is empty")

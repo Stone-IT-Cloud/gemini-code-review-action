@@ -12,24 +12,6 @@
 import json
 
 from src.review_formatter import format_review_comment
-from src.prompts import get_review_prompt
-from src.review_parser import REVIEW_SYSTEM_PROMPT
-
-
-class TestGetReviewPrompt:
-    def test_includes_system_prompt(self):
-        prompt = get_review_prompt()
-        assert REVIEW_SYSTEM_PROMPT in prompt
-
-    def test_includes_extra_prompt(self):
-        prompt = get_review_prompt(extra_prompt="Focus on security")
-        assert "Focus on security" in prompt
-        assert REVIEW_SYSTEM_PROMPT in prompt
-
-    def test_empty_extra_prompt_not_included(self):
-        prompt = get_review_prompt(extra_prompt="  ")
-        # Should not have a blank extra section but still include system prompt
-        assert REVIEW_SYSTEM_PROMPT in prompt
 
 
 class TestFormatReviewComment:

@@ -130,13 +130,20 @@ def main(
         return
 
     # Create a comment to a pull request
-    create_a_comment_to_pull_request(
+    response = create_a_comment_to_pull_request(
         github_token=os.getenv("GITHUB_TOKEN"),
         github_repository=os.getenv("GITHUB_REPOSITORY"),
         pull_request_number=int(os.getenv("GITHUB_PULL_REQUEST_NUMBER")),
         git_commit_hash=os.getenv("GIT_COMMIT_HASH"),
         body=review_comment,
     )
+    if response.status_code >= 400:
+        logger.error(
+            f"Failed to post PR review comment: HTTP {response.status_code} - {response.text}"
+        )
+        raise RuntimeError(
+            f"GitHub API returned {response.status_code} when posting review comment"
+        )
 
 
 if __name__ == "__main__":

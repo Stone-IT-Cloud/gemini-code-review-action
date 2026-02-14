@@ -43,11 +43,23 @@ def get_review(config: AiReviewConfig) -> tuple:
         "top_p": top_p,
         "top_k": top_k,
         "max_output_tokens": max_output_tokens,
+        "response_mime_type": "application/json",
     }
-    genai_model = genai.GenerativeModel(
+    review_model = genai.GenerativeModel(
         model_name=model,
         generation_config=generation_config,
         system_instruction=review_prompt,
+    )
+    # Separate model for summarization (no review system_instruction / no JSON constraint).
+    summarize_generation_config = {
+        "temperature": temperature,
+        "top_p": top_p,
+        "top_k": top_k,
+        "max_output_tokens": max_output_tokens,
+    }
+    summarize_model = genai.GenerativeModel(
+        model_name=model,
+        generation_config=summarize_generation_config,
     )
 
     # Throttling controls (defaults tuned to avoid bursty request patterns in CI).
@@ -75,8 +87,7 @@ def get_review(config: AiReviewConfig) -> tuple:
         for attempt in range(max_attempts):
             try:
                 prompt_parts: List[str] = [
-                    review_prompt.strip(),
-                    f"\n\n[Pull request diff chunk {idx}/{len(chunked_diff_list)}]\n{chunked_diff}",
+                    f"[Pull request diff chunk {idx}/{len(chunked_diff_list)}]\n{chunked_diff}",
                 ]
 
                 # Include PR comments only if present; this can be large, so keep it optional.
@@ -91,7 +102,7 @@ def get_review(config: AiReviewConfig) -> tuple:
                     "\n\nNow provide your review according to the earlier instructions."
                 )
 
-                response = genai_model.generate_content("\n".join(prompt_parts))
+                response = review_model.generate_content("\n".join(prompt_parts))
                 now = time.time()
                 tracker.note_request(now)
                 last_request_at = now
@@ -158,7 +169,7 @@ def get_review(config: AiReviewConfig) -> tuple:
             if since_last < min_request_interval:
                 time.sleep(min_request_interval - since_last)
 
-            response = genai_model.generate_content(
+            response = summarize_model.generate_content(
                 summarize_prompt + "\n\n" + chunked_reviews_join
             )
             now = time.time()

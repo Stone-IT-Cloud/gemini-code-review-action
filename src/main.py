@@ -62,10 +62,10 @@ from src.review_formatter import format_review_comment
 )
 @click.option(
     "--review-level",
-    type=click.STRING,
+    type=click.Choice(["TRIVIAL", "IMPORTANT", "CRITICAL"], case_sensitive=False),
     required=False,
     default=None,
-    help="Minimum severity level to comment on (TRIVIAL, IMPORTANT, CRITICAL)",
+    help="Minimum severity level to comment on",
 )
 def main(
     diff_file: str,

@@ -11,9 +11,9 @@
 #  limitations under the License.
 """Test that review-level CLI parameter works correctly."""
 import os
-from unittest.mock import MagicMock, patch
+import tempfile
+from unittest.mock import patch
 
-import pytest
 from click.testing import CliRunner
 
 from src.main import main
@@ -41,9 +41,9 @@ class TestReviewLevelCLI:
         os.environ["GEMINI_API_KEY"] = "test-key"
         os.environ["LOCAL"] = "1"
 
-        # Create a test diff file
-        test_diff_file = "/tmp/test_review_level.diff"
-        with open(test_diff_file, "w", encoding="utf-8") as f:
+        # Create a test diff file using tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as f:
+            test_diff_file = f.name
             f.write("diff --git a/test.py b/test.py\n")
 
         try:
@@ -72,12 +72,9 @@ class TestReviewLevelCLI:
             # Cleanup
             if os.path.exists(test_diff_file):
                 os.remove(test_diff_file)
-            if "GEMINI_API_KEY" in os.environ:
-                del os.environ["GEMINI_API_KEY"]
-            if "LOCAL" in os.environ:
-                del os.environ["LOCAL"]
-            if "REVIEW_LEVEL" in os.environ:
-                del os.environ["REVIEW_LEVEL"]
+            for key in ["GEMINI_API_KEY", "LOCAL", "REVIEW_LEVEL"]:
+                if key in os.environ:
+                    del os.environ[key]
 
     @patch("src.main.genai")
     @patch("src.main.get_review")
@@ -99,9 +96,9 @@ class TestReviewLevelCLI:
         os.environ["LOCAL"] = "1"
         os.environ["REVIEW_LEVEL"] = "TRIVIAL"
 
-        # Create a test diff file
-        test_diff_file = "/tmp/test_review_level_env.diff"
-        with open(test_diff_file, "w", encoding="utf-8") as f:
+        # Create a test diff file using tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as f:
+            test_diff_file = f.name
             f.write("diff --git a/test.py b/test.py\n")
 
         try:
@@ -152,9 +149,9 @@ class TestReviewLevelCLI:
         os.environ["LOCAL"] = "1"
         os.environ["REVIEW_LEVEL"] = "TRIVIAL"
 
-        # Create a test diff file
-        test_diff_file = "/tmp/test_review_level_override.diff"
-        with open(test_diff_file, "w", encoding="utf-8") as f:
+        # Create a test diff file using tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as f:
+            test_diff_file = f.name
             f.write("diff --git a/test.py b/test.py\n")
 
         try:
@@ -207,9 +204,9 @@ class TestReviewLevelCLI:
         os.environ["GEMINI_API_KEY"] = "test-key"
         os.environ["LOCAL"] = "1"
 
-        # Create a test diff file
-        test_diff_file = "/tmp/test_review_level_default.diff"
-        with open(test_diff_file, "w", encoding="utf-8") as f:
+        # Create a test diff file using tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as f:
+            test_diff_file = f.name
             f.write("diff --git a/test.py b/test.py\n")
 
         try:

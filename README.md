@@ -141,5 +141,63 @@ Gemini quotas are shared across your project/account. If multiple workflows run 
 ## Local testing
 Set the `LOCAL` environment variable to any value to prevent posting comments and log the review output instead.
 
+### Running locally without Docker
+
+You can run the review tool directly from your machine using Python. This is useful for testing diffs before pushing to GitHub.
+
+**1. Install dependencies:**
+
+```bash
+pip install -r requirements.txt
+```
+
+**2. Set environment variables:**
+
+```bash
+export GEMINI_API_KEY="your-gemini-api-key"
+export LOCAL=1
+```
+
+**3. Generate a diff and run the review:**
+
+```bash
+# Generate a diff from your branch
+git diff main > /tmp/my-changes.diff
+
+# Run the review
+python -m src.main \
+    --diff-file=/tmp/my-changes.diff \
+    --model=gemini-2.5-flash \
+    --extra-prompt="Review as a senior Python engineer." \
+    --temperature=0.7 \
+    --top-p=1 \
+    --diff-chunk-size=2000000
+```
+
+Or use the bundled helper script:
+
+```bash
+bash test/run-local.sh /tmp/my-changes.diff
+```
+
+> **Future:** This local workflow is designed to also work as a [pre-commit](https://pre-commit.com/) hook, enabling automated AI code review before every commit.
+
+## Project structure
+
+The source code follows the **Single Responsibility Principle (SRP)**, with each module handling one concern:
+
+```
+src/
+├── main.py              # CLI entry point and orchestration
+├── config.py            # Configuration and environment validation
+├── gemini_client.py     # Gemini AI API interactions
+├── github_client.py     # GitHub API interactions (comments, PR data)
+├── prompts.py           # Prompt templates for the AI model
+├── quota.py             # Rate limiting and quota tracking
+├── review_formatter.py  # Formatting review output for GitHub
+├── review_parser.py     # Parsing structured JSON from AI responses
+└── utils.py             # General-purpose utilities
+```
+
 ## Notes
 - This Action fetches PR comments using [PyGithub](https://github.com/PyGithub/PyGithub) and includes them in the model context to avoid redundant feedback and align with ongoing discussion.

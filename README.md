@@ -24,6 +24,10 @@ If the diff exceeds the model's context window, the Action splits it into chunks
 - `pull_request_diff_file` (required): Path to the PR diff file to review.
 - `pull_request_chunk_size` (optional): Diff chunk size to fit model limits.
 - `log_level` (optional): Logging level (e.g., `INFO`, `DEBUG`).
+- `review_level` (optional): Minimum severity level to post comments (defaults to `IMPORTANT`).
+  - `TRIVIAL`: Include all comments (style issues, formatting, minor refactoring, etc.)
+  - `IMPORTANT`: Include important and critical issues (logic errors, bugs, performance issues)
+  - `CRITICAL`: Only include critical issues (security vulnerabilities, crashes, data loss risks)
 
 ### Environment Variables for Quota Management
 
@@ -48,10 +52,53 @@ env:
 - Summarizes into a single review comment posted to the PR.
 - Reads existing PR comments and reviews using PyGithub and injects them into the AI context so prior feedback is respected.
 - Configurable prompt, model, and chunk size.
+- **Severity-based filtering** to reduce noise from trivial suggestions (see [Severity Filtering](#severity-filtering)).
 
 As you might know, a model of Gemini has limitation of the maximum number of input tokens.
 So we have to split the diff of a pull request into multiple chunks, if the size of the diff is over the limitation.
 We can tune the chunk size based on the model we use.
+
+## Severity Filtering
+
+To reduce review noise, the action classifies comments by severity and allows you to filter which ones get posted. This is useful for focusing on important issues while avoiding trivial style suggestions.
+
+### Severity Levels
+
+- **TRIVIAL**: Style issues, formatting, minor refactoring, missing docstrings
+- **IMPORTANT**: Logic errors, potential bugs, performance inefficiencies (e.g., O(n²)), bad practices
+- **CRITICAL**: Security vulnerabilities (SQLi, XSS), potential crashes, breaking changes, data loss risks
+
+### Configuration
+
+**In GitHub Actions workflows:**
+
+```yaml
+- uses: Stone-IT-Cloud/gemini-code-review-action@1.1.4
+  with:
+    review_level: IMPORTANT  # Default: filters out TRIVIAL comments
+    # Other parameters...
+```
+
+**When running locally:**
+
+```bash
+# Option 1: Use CLI parameter
+python -m src.main \
+    --diff-file=/tmp/my-changes.diff \
+    --review-level=CRITICAL \
+    # Other parameters...
+
+# Option 2: Use environment variable
+export REVIEW_LEVEL=CRITICAL
+python -m src.main --diff-file=/tmp/my-changes.diff
+```
+
+**Behavior:**
+- `review_level: TRIVIAL` → Posts all comments (including style suggestions)
+- `review_level: IMPORTANT` (default) → Posts IMPORTANT + CRITICAL only
+- `review_level: CRITICAL` → Posts only CRITICAL security/stability issues
+
+Comments that don't meet the threshold are logged but not posted to the PR.
 
 ## Example usage
 The workflow below writes the PR diff to a file and passes its path to the Action. The Action will also fetch PR comments automatically via the provided `github_token` and include them in the review context.
@@ -116,6 +163,9 @@ jobs:
           extra_prompt: |
             Please review as a senior Python and security engineer. Be concise and actionable.
           log_level: INFO
+          # Optional: Set minimum severity level for comments (TRIVIAL, IMPORTANT, CRITICAL)
+          # Default is IMPORTANT (filters out trivial style suggestions)
+          # review_level: CRITICAL
 ```
 
 ## How it works
@@ -171,12 +221,25 @@ python -m src.main \
     --extra-prompt="Review as a senior Python engineer." \
     --temperature=0.7 \
     --top-p=1 \
-    --diff-chunk-size=2000000
+    --diff-chunk-size=2000000 \
+    --review-level=IMPORTANT
 ```
+
+**Review Level Options:**
+- `--review-level=TRIVIAL`: Show all comments including style suggestions
+- `--review-level=IMPORTANT` (default): Show important and critical issues only
+- `--review-level=CRITICAL`: Show only critical security and stability issues
 
 Or use the bundled helper script:
 
 ```bash
+bash test/run-local.sh /tmp/my-changes.diff
+```
+
+You can also set the review level via environment variable:
+
+```bash
+export REVIEW_LEVEL=CRITICAL
 bash test/run-local.sh /tmp/my-changes.diff
 ```
 

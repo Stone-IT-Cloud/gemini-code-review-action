@@ -60,6 +60,13 @@ from src.review_formatter import format_review_comment
     default="INFO",
     help="Log level",
 )
+@click.option(
+    "--review-level",
+    type=click.STRING,
+    required=False,
+    default=None,
+    help="Minimum severity level to comment on (TRIVIAL, IMPORTANT, CRITICAL)",
+)
 def main(
     diff_file: str,
     diff_chunk_size: int,
@@ -68,6 +75,7 @@ def main(
     temperature: float,
     top_p: float,
     log_level: str,
+    review_level: str,
 ):
     # Set log level
     logger.level(log_level)
@@ -113,11 +121,12 @@ def main(
     logger.debug(f"Chunked reviews: {chunked_reviews}")
 
     # Format reviews with severity filtering
-    review_level = os.getenv("REVIEW_LEVEL", "IMPORTANT")
+    # Priority: CLI argument > environment variable > default
+    min_severity = review_level or os.getenv("REVIEW_LEVEL", "IMPORTANT")
     review_comment = format_review_comment(
         summarized_review=summarized_review,
         chunked_reviews=chunked_reviews,
-        min_severity=review_level,
+        min_severity=min_severity,
     )
 
     # Expose outputs to workflows (works for both container actions and composite wrappers).

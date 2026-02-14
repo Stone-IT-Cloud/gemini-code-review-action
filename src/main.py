@@ -112,9 +112,12 @@ def main(
     logger.debug(f"Summarized review: {summarized_review}")
     logger.debug(f"Chunked reviews: {chunked_reviews}")
 
-    # Format reviews
+    # Format reviews with severity filtering
+    review_level = os.getenv("REVIEW_LEVEL", "IMPORTANT")
     review_comment = format_review_comment(
-        summarized_review=summarized_review, chunked_reviews=chunked_reviews
+        summarized_review=summarized_review,
+        chunked_reviews=chunked_reviews,
+        min_severity=review_level,
     )
 
     # Expose outputs to workflows (works for both container actions and composite wrappers).

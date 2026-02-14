@@ -13,8 +13,12 @@ import json
 
 import pytest
 
-from src.review_parser import (REVIEW_SYSTEM_PROMPT, _validate_review_item,
-                               parse_review_response, strip_markdown_fences)
+from src.review_parser import (
+    REVIEW_SYSTEM_PROMPT,
+    _validate_review_item,
+    parse_review_response,
+    strip_markdown_fences,
+)
 
 # ---------------------------------------------------------------------------
 # strip_markdown_fences

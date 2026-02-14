@@ -18,14 +18,18 @@ from loguru import logger
 VALID_SEVERITIES = frozenset({"critical", "important", "trivial"})
 
 REVIEW_SYSTEM_PROMPT = (
-    "You are an expert code reviewer. Your task is to analyze the provided code changes.\n"
+    "You are an expert code reviewer. Your task is to analyze the provided "
+    "code changes.\n"
     "You must output your review strictly as a JSON array of objects.\n"
     "Do not include any markdown formatting (like ```json).\n"
     "\n"
     "Severity Classification:\n"
-    "- TRIVIAL: Style issues, formatting, minor refactoring, missing docstrings.\n"
-    "- IMPORTANT: Logic errors, potential bugs, performance inefficiencies (e.g., O(n^2)), bad practices.\n"
-    "- CRITICAL: Security vulnerabilities (SQLi, XSS), potential crashes, breaking changes, data loss risks.\n"
+    "- TRIVIAL: Style issues, formatting, minor refactoring, missing "
+    "docstrings.\n"
+    "- IMPORTANT: Logic errors, potential bugs, performance inefficiencies "
+    "(e.g., O(n^2)), bad practices.\n"
+    "- CRITICAL: Security vulnerabilities (SQLi, XSS), potential crashes, "
+    "breaking changes, data loss risks.\n"
     "\n"
     "Use the following schema for each review item:\n"
     "[\n"
@@ -33,9 +37,12 @@ REVIEW_SYSTEM_PROMPT = (
     '    "file": "filename.py",\n'
     '    "line": <line_number_as_integer>,\n'
     '    "severity": "TRIVIAL | IMPORTANT | CRITICAL",\n'
-    '    "comment": "Your review comment here"\n'
+    '    "comment": "Your review comment here",\n'
+    '    "suggestion": "optional fixed code snippet"\n'
     "  }\n"
     "]\n"
+    "The 'suggestion' field is optional. Include it when you can provide a "
+    "concrete code fix.\n"
     "If you have no comments, return an empty JSON array: []\n"
     "Do not add any text before or after the JSON array."
 )
@@ -63,6 +70,7 @@ def _validate_review_item(item: dict) -> Optional[dict]:
     line_val = item.get("line")
     severity_val = item.get("severity")
     comment_val = item.get("comment")
+    suggestion_val = item.get("suggestion")
 
     if not isinstance(file_val, str) or not file_val.strip():
         return None
@@ -83,12 +91,23 @@ def _validate_review_item(item: dict) -> Optional[dict]:
     if severity_val not in VALID_SEVERITIES:
         severity_val = "important"
 
-    return {
+    # Validate suggestion if present; must be non-empty string
+    normalized_suggestion = None
+    if suggestion_val is not None:
+        if isinstance(suggestion_val, str) and suggestion_val.strip():
+            normalized_suggestion = suggestion_val.strip()
+
+    result = {
         "file": file_val.strip(),
         "line": line_val,
         "severity": severity_val,
         "comment": comment_val.strip(),
     }
+
+    if normalized_suggestion is not None:
+        result["suggestion"] = normalized_suggestion
+
+    return result
 
 
 def parse_review_response(text: Optional[str]) -> List[dict]:

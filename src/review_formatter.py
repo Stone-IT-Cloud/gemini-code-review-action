@@ -86,8 +86,16 @@ def format_review_comment(
             file_name = item["file"]
             line_num = item["line"]
             comment = item["comment"]
+            suggestion = item.get("suggestion")
+
             loc = f"{file_name}:{line_num}" if line_num != 0 else file_name
-            lines.append(f"**[{severity}]** `{loc}`: {comment}")
+            formatted_comment = f"**[{severity}]** `{loc}`: {comment}"
+
+            # Add GitHub inline suggestion if present
+            if suggestion:
+                formatted_comment += f"\n```suggestion\n{suggestion}\n```"
+
+            lines.append(formatted_comment)
         structured_body = "\n\n".join(lines)
     elif any_parsed:
         # All chunks were valid JSON but had no review items.

@@ -505,8 +505,8 @@ class TestSuggestionEdgeCases:
         )
         assert suggestion in result
 
-    def test_suggestion_with_triple_backticks(self):
-        """Test suggestion containing triple backticks in code."""
+    def test_suggestion_with_triple_quotes(self):
+        """Test suggestion containing triple quotes in code."""
         suggestion = 'docstring = """Example"""'
         items = [{
             "file": "a.py",
@@ -521,6 +521,25 @@ class TestSuggestionEdgeCases:
             chunked_reviews=[chunk],
             min_severity="trivial"
         )
+        assert suggestion in result
+
+    def test_suggestion_with_actual_triple_backticks(self):
+        """Test suggestion containing triple backticks (markdown fence)."""
+        suggestion = 'code = "```python\\nprint()\\n```"'
+        items = [{
+            "file": "a.py",
+            "line": 5,
+            "severity": "trivial",
+            "comment": "Fix markdown",
+            "suggestion": suggestion
+        }]
+        chunk = json.dumps(items)
+        result = format_review_comment(
+            summarized_review="Summary",
+            chunked_reviews=[chunk],
+            min_severity="trivial"
+        )
+        # Should still contain the suggestion despite backticks
         assert suggestion in result
 
     def test_suggestion_with_unicode(self):

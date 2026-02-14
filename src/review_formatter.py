@@ -22,11 +22,11 @@ SEVERITY_MAP = {"trivial": 1, "important": 2, "critical": 3}
 
 def filter_by_severity(items: List[dict], min_severity: str) -> List[dict]:
     """Filter review items based on minimum severity threshold.
-    
+
     Args:
         items: List of review items with 'severity' field
         min_severity: Minimum severity level (trivial, important, critical)
-        
+
     Returns:
         Filtered list of items that meet the threshold
     """
@@ -36,14 +36,14 @@ def filter_by_severity(items: List[dict], min_severity: str) -> List[dict]:
             f"Unknown severity threshold '{min_severity}', defaulting to 'important'"
         )
         min_severity_normalized = "important"
-    
+
     min_level = SEVERITY_MAP[min_severity_normalized]
     filtered: List[dict] = []
-    
+
     for item in items:
         item_severity = item.get("severity", "important").lower()
         item_level = SEVERITY_MAP.get(item_severity, SEVERITY_MAP["important"])
-        
+
         if item_level >= min_level:
             filtered.append(item)
         else:
@@ -51,7 +51,7 @@ def filter_by_severity(items: List[dict], min_severity: str) -> List[dict]:
             logger.info(
                 f"Skipping {item_severity.upper()} comment on file {file_name}"
             )
-    
+
     return filtered
 
 

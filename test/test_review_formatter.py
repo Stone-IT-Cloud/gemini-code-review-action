@@ -69,7 +69,7 @@ class TestFilterBySeverity:
     def test_filter_empty_list(self):
         """Test filtering an empty list."""
         result = filter_by_severity([], "critical")
-        assert result == []
+        assert not result
 
     def test_filter_missing_severity_defaults_to_important(self):
         """Test that items with missing severity are treated as important."""

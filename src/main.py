@@ -18,11 +18,8 @@ from loguru import logger
 
 from src.config import AiReviewConfig, check_required_env_vars
 from src.gemini_client import get_review
-from src.github_client import (
-    create_a_comment_to_pull_request,
-    get_all_pr_comments_text,
-    write_github_output,
-)
+from src.github_client import (create_a_comment_to_pull_request,
+                               get_all_pr_comments_text, write_github_output)
 from src.prompts import get_review_prompt
 from src.review_formatter import format_review_comment
 

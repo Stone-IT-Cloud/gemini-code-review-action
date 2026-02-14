@@ -73,6 +73,10 @@ inputs:
     description: "Log level"
     required: false
     default: "INFO"
+  review_level:
+    description: "Minimum severity level to comment on PR (TRIVIAL, IMPORTANT, CRITICAL)"
+    required: false
+    default: "IMPORTANT"
 
 outputs:
   entire_prompt_body:
@@ -124,6 +128,7 @@ runs:
         TEMPERATURE: ${{ inputs.temperature }}
         TOP_P: ${{ inputs.top_p }}
         LOG_LEVEL: ${{ inputs.log_level }}
+        REVIEW_LEVEL: ${{ inputs.review_level }}
       run: |
         set -euo pipefail
 
@@ -164,6 +169,7 @@ runs:
           -e GITHUB_REPOSITORY \
           -e GITHUB_PULL_REQUEST_NUMBER \
           -e GIT_COMMIT_HASH \
+          -e REVIEW_LEVEL \
           -e LOCAL \
           -e GITHUB_OUTPUT \
           "$ACTION_IMAGE_TAG" \

@@ -20,7 +20,6 @@ from src.review_parser import (
     strip_markdown_fences,
 )
 
-
 # ---------------------------------------------------------------------------
 # strip_markdown_fences
 # ---------------------------------------------------------------------------
@@ -58,44 +57,44 @@ class TestValidateReviewItem:
         assert result == {"file": "main.py", "line": 10, "severity": "critical", "comment": "Bug here"}
 
     def test_missing_file(self):
-        assert _validate_review_item({"line": 1, "severity": "minor", "comment": "x"}) is None
+        assert _validate_review_item({"line": 1, "severity": "trivial", "comment": "x"}) is None
 
     def test_empty_file(self):
-        assert _validate_review_item({"file": "  ", "line": 1, "severity": "minor", "comment": "x"}) is None
+        assert _validate_review_item({"file": "  ", "line": 1, "severity": "trivial", "comment": "x"}) is None
 
     def test_missing_comment(self):
-        assert _validate_review_item({"file": "a.py", "line": 1, "severity": "minor"}) is None
+        assert _validate_review_item({"file": "a.py", "line": 1, "severity": "trivial"}) is None
 
     def test_empty_comment(self):
-        assert _validate_review_item({"file": "a.py", "line": 1, "severity": "minor", "comment": "  "}) is None
+        assert _validate_review_item({"file": "a.py", "line": 1, "severity": "trivial", "comment": "  "}) is None
 
     def test_null_line_defaults_to_zero(self):
-        result = _validate_review_item({"file": "a.py", "line": None, "severity": "minor", "comment": "ok"})
+        result = _validate_review_item({"file": "a.py", "line": None, "severity": "trivial", "comment": "ok"})
         assert result["line"] == 0
 
     def test_missing_line_defaults_to_zero(self):
-        result = _validate_review_item({"file": "a.py", "severity": "minor", "comment": "ok"})
+        result = _validate_review_item({"file": "a.py", "severity": "trivial", "comment": "ok"})
         assert result["line"] == 0
 
     def test_string_line_coerced(self):
-        result = _validate_review_item({"file": "a.py", "line": "42", "severity": "minor", "comment": "ok"})
+        result = _validate_review_item({"file": "a.py", "line": "42", "severity": "trivial", "comment": "ok"})
         assert result["line"] == 42
 
     def test_invalid_line_defaults_to_zero(self):
-        result = _validate_review_item({"file": "a.py", "line": "abc", "severity": "minor", "comment": "ok"})
+        result = _validate_review_item({"file": "a.py", "line": "abc", "severity": "trivial", "comment": "ok"})
         assert result["line"] == 0
 
-    def test_unknown_severity_defaults_to_suggestion(self):
+    def test_unknown_severity_defaults_to_important(self):
         result = _validate_review_item({"file": "a.py", "line": 1, "severity": "unknown", "comment": "ok"})
-        assert result["severity"] == "suggestion"
+        assert result["severity"] == "important"
 
-    def test_missing_severity_defaults_to_suggestion(self):
+    def test_missing_severity_defaults_to_important(self):
         result = _validate_review_item({"file": "a.py", "line": 1, "comment": "ok"})
-        assert result["severity"] == "suggestion"
+        assert result["severity"] == "important"
 
     def test_severity_case_insensitive(self):
-        result = _validate_review_item({"file": "a.py", "line": 1, "severity": "MAJOR", "comment": "ok"})
-        assert result["severity"] == "major"
+        result = _validate_review_item({"file": "a.py", "line": 1, "severity": "IMPORTANT", "comment": "ok"})
+        assert result["severity"] == "important"
 
     def test_non_dict_returns_none(self):
         assert _validate_review_item("not a dict") is None
@@ -103,11 +102,11 @@ class TestValidateReviewItem:
         assert _validate_review_item(None) is None
 
     def test_whitespace_trimmed(self):
-        result = _validate_review_item({"file": "  a.py  ", "line": 1, "severity": " minor ", "comment": " ok "})
-        assert result == {"file": "a.py", "line": 1, "severity": "minor", "comment": "ok"}
+        result = _validate_review_item({"file": "  a.py  ", "line": 1, "severity": " trivial ", "comment": " ok "})
+        assert result == {"file": "a.py", "line": 1, "severity": "trivial", "comment": "ok"}
 
     def test_all_valid_severities(self):
-        for severity in ("critical", "major", "minor", "suggestion"):
+        for severity in ("critical", "important", "trivial"):
             result = _validate_review_item({"file": "a.py", "line": 1, "severity": severity, "comment": "ok"})
             assert result["severity"] == severity
 
@@ -118,7 +117,7 @@ class TestValidateReviewItem:
 
 class TestParseReviewResponseValidJson:
     def test_single_item_array(self):
-        text = json.dumps([{"file": "a.py", "line": 5, "severity": "minor", "comment": "Looks odd"}])
+        text = json.dumps([{"file": "a.py", "line": 5, "severity": "trivial", "comment": "Looks odd"}])
         result = parse_review_response(text)
         assert len(result) == 1
         assert result[0]["file"] == "a.py"
@@ -127,7 +126,7 @@ class TestParseReviewResponseValidJson:
     def test_multiple_items(self):
         items = [
             {"file": "a.py", "line": 1, "severity": "critical", "comment": "Bug"},
-            {"file": "b.py", "line": 20, "severity": "suggestion", "comment": "Style"},
+            {"file": "b.py", "line": 20, "severity": "trivial", "comment": "Style"},
         ]
         result = parse_review_response(json.dumps(items))
         assert len(result) == 2

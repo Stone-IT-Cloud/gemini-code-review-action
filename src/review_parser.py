@@ -15,18 +15,24 @@ from typing import List, Optional
 
 from loguru import logger
 
-VALID_SEVERITIES = frozenset({"critical", "major", "minor", "suggestion"})
+VALID_SEVERITIES = frozenset({"critical", "important", "trivial"})
 
 REVIEW_SYSTEM_PROMPT = (
     "You are an expert code reviewer. Your task is to analyze the provided code changes.\n"
     "You must output your review strictly as a JSON array of objects.\n"
     "Do not include any markdown formatting (like ```json).\n"
+    "\n"
+    "Severity Classification:\n"
+    "- TRIVIAL: Style issues, formatting, minor refactoring, missing docstrings.\n"
+    "- IMPORTANT: Logic errors, potential bugs, performance inefficiencies (e.g., O(n^2)), bad practices.\n"
+    "- CRITICAL: Security vulnerabilities (SQLi, XSS), potential crashes, breaking changes, data loss risks.\n"
+    "\n"
     "Use the following schema for each review item:\n"
     "[\n"
     "  {\n"
     '    "file": "filename.py",\n'
     '    "line": <line_number_as_integer>,\n'
-    '    "severity": "critical | major | minor | suggestion",\n'
+    '    "severity": "TRIVIAL | IMPORTANT | CRITICAL",\n'
     '    "comment": "Your review comment here"\n'
     "  }\n"
     "]\n"
@@ -71,11 +77,11 @@ def _validate_review_item(item: dict) -> Optional[dict]:
     except (TypeError, ValueError):
         line_val = 0
 
-    # Normalize severity; default to "suggestion" if unrecognized.
+    # Normalize severity; default to "important" if unrecognized.
     if isinstance(severity_val, str):
         severity_val = severity_val.strip().lower()
     if severity_val not in VALID_SEVERITIES:
-        severity_val = "suggestion"
+        severity_val = "important"
 
     return {
         "file": file_val.strip(),

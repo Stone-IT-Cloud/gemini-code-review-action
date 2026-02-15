@@ -80,6 +80,7 @@ disable=abstract-method,
         import-error,
         import-self,
         import-star-module-level,
+        inconsistent-quotes,  # Allow single quotes in regex patterns and raw strings
         inconsistent-return-statements,
         input-builtin,
         intern-builtin,

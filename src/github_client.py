@@ -133,7 +133,9 @@ def create_inline_review_comments(
                     "status_code": response.status_code,
                     "error": response.text
                 })
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
+            # Catch all exceptions to ensure we never fail the entire review
+            # due to issues posting a single comment
             logger.error(
                 f"Exception posting inline comment to {item.get('file')}:"
                 f"{item.get('line')}: {exc}"

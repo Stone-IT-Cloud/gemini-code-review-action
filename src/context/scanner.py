@@ -68,9 +68,12 @@ class ContextScanner:
             if not filepath.exists() or not filepath.is_file():
                 return None
 
-            # Read with byte limit
-            with open(filepath, 'r', encoding='utf-8', errors='ignore') as file:
-                content = file.read(MAX_BYTES_PER_FILE)
+            # Read with byte limit (read in binary mode then decode)
+            with open(filepath, 'rb') as file:
+                raw_bytes = file.read(MAX_BYTES_PER_FILE)
+
+            # Decode with best-effort error handling
+            content = raw_bytes.decode('utf-8', errors='ignore')
 
             # Apply line limit
             lines = content.split('\n')
@@ -191,7 +194,7 @@ class ContextScanner:
                         parser = DotNetParser()
                         key = f"dotnet_{proj_file.stem}"
                         self.context[key] = parser.parse(content)
-                        break  # Only parse first project file found
+                        return  # Exit function after parsing first project file
                     except Exception as exc:  # pylint: disable=broad-except
                         logger.debug(f"Failed to parse {proj_file}: {exc}")
 
@@ -254,10 +257,14 @@ class ContextScanner:
                             parsed = parser.parse(content)
                             parsed["filename"] = yaml_file.name
                             k8s_resources.append(parsed)
+
+                            # Stop processing more files once we reach 10 resources
+                            if len(k8s_resources) >= 10:
+                                break
                         except Exception as exc:  # pylint: disable=broad-except
                             logger.debug(f"Failed to parse {yaml_file}: {exc}")
 
-                # Limit to first 10 parsed resources
+                # Exit if we've collected enough resources
                 if len(k8s_resources) >= 10:
                     break
 
@@ -295,21 +302,28 @@ class ContextScanner:
         # Find .tf files
         tf_files = list(self.repo_root.glob("*.tf"))
         if tf_files:
-            # Parse the first .tf file found
-            content = self._read_file_limited(tf_files[0])
+            # Prefer main.tf, then provider.tf, then fall back to the first file
+            selected_tf = next((f for f in tf_files if f.name == "main.tf"), None)
+            if selected_tf is None:
+                selected_tf = next((f for f in tf_files if f.name == "provider.tf"), None)
+            if selected_tf is None:
+                selected_tf = tf_files[0]
+
+            content = self._read_file_limited(selected_tf)
             if content is not None:
                 try:
                     parser = TerraformParser()
                     self.context["terraform"] = parser.parse(content)
                     self.context["terraform"]["files_found"] = [f.name for f in tf_files[:10]]
                 except Exception as exc:  # pylint: disable=broad-except
-                    logger.debug(f"Failed to parse {tf_files[0]}: {exc}")
+                    logger.debug(f"Failed to parse {selected_tf}: {exc}")
 
     def _scan_documentation(self) -> None:
         """Scan for critical Markdown documentation."""
         docs = {}
-        doc_files = ["README.md", "CONTRIBUTING.md", "ARCHITECTURE.md", "SECURITY.md"]
 
+        # Scan root directory for common documentation files
+        doc_files = ["README.md", "CONTRIBUTING.md", "ARCHITECTURE.md", "SECURITY.md"]
         for doc_file in doc_files:
             doc_path = self.repo_root / doc_file
             content = self._read_file_limited(doc_path)
@@ -319,6 +333,18 @@ class ContextScanner:
                 if len(first_para) > 200:
                     first_para = first_para[:200] + "..."
                 docs[doc_file] = first_para
+
+        # Scan docs/ directory for additional documentation (top 2 files)
+        docs_dir = self.repo_root / "docs"
+        if docs_dir.exists() and docs_dir.is_dir():
+            md_files = list(docs_dir.glob("*.md"))[:2]  # Limit to first 2 files
+            for doc_file in md_files:
+                content = self._read_file_limited(doc_file)
+                if content:
+                    first_para = content.split('\n\n')[0]
+                    if len(first_para) > 200:
+                        first_para = first_para[:200] + "..."
+                    docs[f"docs/{doc_file.name}"] = first_para
 
         if docs:
             self.context["documentation"] = {
@@ -332,6 +358,9 @@ class ContextScanner:
         Returns:
             Dictionary containing parsed context from all detected files
         """
+        # Clear context to ensure deterministic results per scan
+        self.context = {}
+
         logger.info(f"Scanning repository at {self.repo_root}")
 
         # Scan all supported technologies
@@ -391,7 +420,7 @@ class ContextScanner:
         infra_techs = []
         if "docker_dockerfile" in self.context or "docker_compose" in self.context:
             infra_techs.append("Docker")
-        if "kubernetes_files" in self.context:
+        if "kubernetes_resources" in self.context:
             infra_techs.append("Kubernetes")
         if "helm_chart" in self.context:
             infra_techs.append("Helm")

@@ -50,7 +50,7 @@ class DockerComposeParser(BaseParser):
             service_lines = services_match.group(1).split('\n')
             services = []
             for line in service_lines:
-                service_match = re.match(r'\s{2}(\w+):', line)
+                service_match = re.match(r'\s+([A-Za-z0-9_-]+)\s*:', line)
                 if service_match:
                     services.append(service_match.group(1))
             if services:

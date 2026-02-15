@@ -35,15 +35,24 @@ class GolangParser(BaseParser):
             result["go_version"] = go_match.group(1)
 
         # Extract direct dependencies
+        deps = []
+
+        # Handle parenthesized require blocks: require ( ... )
         require_block = re.search(r'require\s*\((.*?)\)', content, re.DOTALL)
         if require_block:
-            deps = []
             for line in require_block.group(1).split('\n'):
                 line = line.strip()
                 if line and not line.startswith('//'):
                     parts = line.split()
                     if len(parts) >= 2:
                         deps.append(f"{parts[0]} {parts[1]}")
+
+        # Handle single-line require statements: require module version
+        for match in re.finditer(r'^require\s+(?!\()(\S+)\s+(\S+)', content, re.MULTILINE):
+            module_name, version = match.groups()
+            deps.append(f"{module_name} {version}")
+
+        if deps:
             result["dependencies"] = deps[:30]
 
         return result

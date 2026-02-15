@@ -70,12 +70,29 @@ class PythonPyprojectParser(BaseParser):
         """Parse pyproject.toml content."""
         result = {"type": "pyproject.toml"}
 
+        # Parse Poetry dependencies from [tool.poetry.dependencies]
         poetry_deps = _parse_toml_section(content, "tool.poetry.dependencies")
         if poetry_deps:
             result["poetry_dependencies"] = poetry_deps[:500]
 
-        project_deps = _parse_toml_section(content, "project.dependencies")
-        if project_deps:
-            result["project_dependencies"] = project_deps[:500]
+        # Parse PEP 621 dependencies from [project] table
+        # dependencies is a key (array) inside [project], not a separate table
+        project_section = _parse_toml_section(content, "project.dependencies")
+        if project_section:
+            result["project_dependencies"] = project_section[:500]
+        else:
+            # Try parsing dependencies array directly from [project] section
+            project_match = re.search(r'\[project\](.*?)(?=\n\[|\Z)', content, re.DOTALL)
+            if project_match:
+                project_content = project_match.group(1)
+                deps_match = re.search(
+                    r'dependencies\s*=\s*\[(.*?)\]', project_content, re.DOTALL
+                )
+                if deps_match:
+                    deps_str = deps_match.group(1)
+                    # Parse array items (simple quoted strings)
+                    deps = re.findall(r'["\']([^"\']+)["\']', deps_str)
+                    if deps:
+                        result["project_dependencies"] = deps[:500]
 
         return result

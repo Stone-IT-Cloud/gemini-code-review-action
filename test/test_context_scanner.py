@@ -28,10 +28,10 @@ class TestContextScannerFileReading:
         with tempfile.TemporaryDirectory() as tmpdir:
             test_file = Path(tmpdir) / "test.txt"
             test_file.write_text("line1\nline2\nline3")
-            
+
             scanner = ContextScanner(tmpdir)
             content = scanner._read_file_limited(test_file)
-            
+
             assert content == "line1\nline2\nline3"
 
     def test_read_file_exceeds_line_limit(self):
@@ -41,10 +41,10 @@ class TestContextScannerFileReading:
             # Create file with more than MAX_LINES_PER_FILE lines
             lines = [f"line{i}" for i in range(MAX_LINES_PER_FILE + 10)]
             test_file.write_text("\n".join(lines))
-            
+
             scanner = ContextScanner(tmpdir)
             content = scanner._read_file_limited(test_file)
-            
+
             # Should only have MAX_LINES_PER_FILE lines
             assert content is not None
             assert content.count('\n') == MAX_LINES_PER_FILE - 1
@@ -56,10 +56,10 @@ class TestContextScannerFileReading:
             # Create file larger than MAX_BYTES_PER_FILE
             large_content = "x" * (MAX_BYTES_PER_FILE + 1000)
             test_file.write_text(large_content)
-            
+
             scanner = ContextScanner(tmpdir)
             content = scanner._read_file_limited(test_file)
-            
+
             # Should be limited to MAX_BYTES_PER_FILE
             assert content is not None
             assert len(content) <= MAX_BYTES_PER_FILE
@@ -69,7 +69,7 @@ class TestContextScannerFileReading:
         with tempfile.TemporaryDirectory() as tmpdir:
             scanner = ContextScanner(tmpdir)
             content = scanner._read_file_limited(Path(tmpdir) / "nonexistent.txt")
-            
+
             assert content is None
 
     def test_read_directory_instead_of_file(self):
@@ -77,7 +77,7 @@ class TestContextScannerFileReading:
         with tempfile.TemporaryDirectory() as tmpdir:
             scanner = ContextScanner(tmpdir)
             content = scanner._read_file_limited(Path(tmpdir))
-            
+
             assert content is None
 
 
@@ -89,10 +89,10 @@ class TestPythonScanning:
         with tempfile.TemporaryDirectory() as tmpdir:
             req_file = Path(tmpdir) / "requirements.txt"
             req_file.write_text("requests==2.28.0\nflask>=2.0.0\ndjango")
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "python_requirements" in context
             assert context["python_requirements"]["type"] == "requirements.txt"
             assert "requests==2.28.0" in context["python_requirements"]["packages"]
@@ -109,10 +109,10 @@ flask = ">=2.0"
 [dev-packages]
 pytest = "*"
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "python_pipfile" in context
             assert context["python_pipfile"]["type"] == "Pipfile"
 
@@ -125,13 +125,15 @@ pytest = "*"
 python = "^3.9"
 requests = "^2.28.0"
 
-[project.dependencies]
-flask = ">=2.0"
+[project]
+dependencies = [
+    "flask>=2.0",
+]
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "python_pyproject" in context
             assert context["python_pyproject"]["type"] == "pyproject.toml"
 
@@ -141,10 +143,10 @@ flask = ">=2.0"
             req_file = Path(tmpdir) / "requirements.txt"
             # Empty file
             req_file.write_text("")
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             # Should still have entry but with empty packages
             assert "python_requirements" in context
 
@@ -165,10 +167,10 @@ class TestPHPScanning:
                     "phpunit/phpunit": "^9.5"
                 }
             }))
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "php_composer" in context
             assert context["php_composer"]["framework"] == "Laravel"
             assert "laravel/framework" in context["php_composer"]["require"]
@@ -182,10 +184,10 @@ class TestPHPScanning:
                     "symfony/framework-bundle": "^6.0"
                 }
             }))
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "php_composer" in context
             assert context["php_composer"]["framework"] == "Symfony"
 
@@ -194,10 +196,10 @@ class TestPHPScanning:
         with tempfile.TemporaryDirectory() as tmpdir:
             composer = Path(tmpdir) / "composer.json"
             composer.write_text("{ invalid json")
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "php_composer" in context
             assert "error" in context["php_composer"]
 
@@ -223,10 +225,10 @@ class TestJavaScriptScanning:
                     "build": "webpack"
                 }
             }))
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "javascript_package" in context
             assert context["javascript_package"]["name"] == "my-app"
             assert "react" in context["javascript_package"]["dependencies"]
@@ -237,10 +239,10 @@ class TestJavaScriptScanning:
         with tempfile.TemporaryDirectory() as tmpdir:
             package = Path(tmpdir) / "package.json"
             package.write_text("not valid json {")
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "javascript_package" in context
             assert "error" in context["javascript_package"]
 
@@ -261,10 +263,10 @@ require (
     github.com/spf13/cobra v1.6.0
 )
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "golang_mod" in context
             assert context["golang_mod"]["module"] == "github.com/user/myapp"
             assert context["golang_mod"]["go_version"] == "1.19"
@@ -275,10 +277,10 @@ require (
         with tempfile.TemporaryDirectory() as tmpdir:
             gomod = Path(tmpdir) / "go.mod"
             gomod.write_text("module myapp\n\ngo 1.20")
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "golang_mod" in context
             assert context["golang_mod"]["module"] == "myapp"
 
@@ -297,10 +299,10 @@ gem 'rails', '~> 7.0.4'
 gem 'pg', '~> 1.1'
 gem 'puma', '~> 5.0'
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "ruby_gemfile" in context
             assert context["ruby_gemfile"]["rails_version"] == "~> 7.0.4"
             assert "rails" in context["ruby_gemfile"]["gems"]
@@ -313,10 +315,10 @@ gem 'puma', '~> 5.0'
 gem 'sinatra'
 gem 'rack'
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "ruby_gemfile" in context
             assert "rails_version" not in context["ruby_gemfile"]
 
@@ -338,10 +340,10 @@ class TestJavaScanning:
     </properties>
 </project>
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "java_pom" in context
             assert context["java_pom"]["groupId"] == "com.example"
             assert context["java_pom"]["artifactId"] == "my-app"
@@ -359,10 +361,10 @@ dependencies {
     testImplementation 'junit:junit:4.13'
 }
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "java_gradle" in context
             assert context["java_gradle"]["sourceCompatibility"] == "17"
 
@@ -384,10 +386,10 @@ class TestDotNetScanning:
     </ItemGroup>
 </Project>
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "dotnet_MyApp" in context
             assert context["dotnet_MyApp"]["target_framework"] == "net7.0"
             assert "Newtonsoft.Json 13.0.1" in context["dotnet_MyApp"]["packages"]
@@ -402,10 +404,10 @@ class TestDotNetScanning:
     </PropertyGroup>
 </Project>
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "dotnet_MyApp" in context
 
 
@@ -425,10 +427,10 @@ edition = "2021"
 serde = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "rust_cargo" in context
             assert context["rust_cargo"]["name"] == "my-rust-app"
             assert context["rust_cargo"]["edition"] == "2021"
@@ -446,10 +448,10 @@ FROM base AS builder
 EXPOSE 8000
 EXPOSE 8080
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "docker_dockerfile" in context
             assert "python:3.11-slim" in context["docker_dockerfile"]["base_images"]
             assert len(context["docker_dockerfile"]["exposed_ports"]) == 2
@@ -467,10 +469,10 @@ services:
   db:
     image: postgres:14
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "docker_compose" in context
             assert "web" in context["docker_compose"]["services"]
             assert "db" in context["docker_compose"]["services"]
@@ -577,10 +579,10 @@ name: my-chart
 version: 1.2.3
 appVersion: "2.0"
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "helm_chart" in context
             assert context["helm_chart"]["name"] == "my-chart"
             assert context["helm_chart"]["version"] == "1.2.3"
@@ -625,10 +627,10 @@ resource "aws_s3_bucket" "data" {
   bucket = "my-bucket"
 }
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "terraform" in context
             assert context["terraform"]["required_version"] == ">= 1.0"
             assert "aws_instance web" in context["terraform"]["resources"]
@@ -650,10 +652,10 @@ This is a great project that does amazing things.
 
 Run npm install.
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "documentation" in context
             assert "README.md" in context["documentation"]["files"]
             assert "My Project" in context["documentation"]["files"]["README.md"]
@@ -664,10 +666,10 @@ Run npm install.
             (Path(tmpdir) / "README.md").write_text("# README")
             (Path(tmpdir) / "CONTRIBUTING.md").write_text("# Contributing Guide")
             (Path(tmpdir) / "SECURITY.md").write_text("# Security Policy")
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "documentation" in context
             assert len(context["documentation"]["files"]) == 3
 
@@ -678,10 +680,10 @@ Run npm install.
             # Create a very long first paragraph
             long_text = "x" * 300
             readme.write_text(long_text)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             # Should be truncated to 200 chars + "..."
             assert len(context["documentation"]["files"]["README.md"]) <= 203
 
@@ -693,11 +695,11 @@ class TestContextSummary:
         """Test summary generation with Python project."""
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "requirements.txt").write_text("flask")
-            
+
             scanner = ContextScanner(tmpdir)
             scanner.scan()
             summary = scanner.get_context_summary()
-            
+
             assert "Python" in summary
 
     def test_summary_with_multiple_languages(self):
@@ -706,11 +708,11 @@ class TestContextSummary:
             (Path(tmpdir) / "requirements.txt").write_text("flask")
             (Path(tmpdir) / "package.json").write_text('{"name": "app"}')
             (Path(tmpdir) / "go.mod").write_text("module app\n\ngo 1.19")
-            
+
             scanner = ContextScanner(tmpdir)
             scanner.scan()
             summary = scanner.get_context_summary()
-            
+
             assert "Python" in summary
             assert "JavaScript/TypeScript" in summary
             assert "Go" in summary
@@ -720,11 +722,11 @@ class TestContextSummary:
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "Dockerfile").write_text("FROM node:16")
             (Path(tmpdir) / "main.tf").write_text("terraform {}")
-            
+
             scanner = ContextScanner(tmpdir)
             scanner.scan()
             summary = scanner.get_context_summary()
-            
+
             assert "Docker" in summary
             assert "Terraform" in summary
 
@@ -734,7 +736,7 @@ class TestContextSummary:
             scanner = ContextScanner(tmpdir)
             scanner.scan()
             summary = scanner.get_context_summary()
-            
+
             assert "No project context detected" in summary
 
     def test_summary_with_frameworks(self):
@@ -744,11 +746,11 @@ class TestContextSummary:
             composer.write_text(json.dumps({
                 "require": {"laravel/framework": "^9.0"}
             }))
-            
+
             scanner = ContextScanner(tmpdir)
             scanner.scan()
             summary = scanner.get_context_summary()
-            
+
             assert "Laravel" in summary
 
 
@@ -759,7 +761,7 @@ class TestEdgeCases:
         """Test scanner with non-existent directory."""
         scanner = ContextScanner("/nonexistent/path/12345")
         context = scanner.scan()
-        
+
         # Should return empty context, not crash
         assert isinstance(context, dict)
 
@@ -770,10 +772,10 @@ class TestEdgeCases:
             (Path(tmpdir) / "requirements.txt").write_text("valid-package")
             (Path(tmpdir) / "package.json").write_text("invalid json {{{")
             (Path(tmpdir) / "go.mod").write_text("module app\ngo 1.19")
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             # Should have parsed requirements.txt and go.mod
             assert "python_requirements" in context
             assert "golang_mod" in context
@@ -785,10 +787,10 @@ class TestEdgeCases:
         with tempfile.TemporaryDirectory() as tmpdir:
             req_file = Path(tmpdir) / "requirements.txt"
             req_file.write_text("# Comment with émoji 🎉\nrequests")
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "python_requirements" in context
 
     def test_binary_file_handling(self):
@@ -796,11 +798,11 @@ class TestEdgeCases:
         with tempfile.TemporaryDirectory() as tmpdir:
             binary_file = Path(tmpdir) / "package.json"
             binary_file.write_bytes(b'\x00\x01\x02\x03')
-            
+
             scanner = ContextScanner(tmpdir)
             # Should not crash
             context = scanner.scan()
-            
+
             # May or may not parse, but shouldn't crash
             assert isinstance(context, dict)
 
@@ -809,10 +811,10 @@ class TestEdgeCases:
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path(tmpdir) / "requirements.txt").write_text("")
             (Path(tmpdir) / "Dockerfile").write_text("")
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             # Should handle gracefully
             assert isinstance(context, dict)
 
@@ -821,14 +823,14 @@ class TestEdgeCases:
         with tempfile.TemporaryDirectory() as tmpdir:
             real_file = Path(tmpdir) / "real.txt"
             real_file.write_text("content")
-            
+
             symlink = Path(tmpdir) / "requirements.txt"
             try:
                 symlink.symlink_to(real_file)
-                
+
                 scanner = ContextScanner(tmpdir)
                 context = scanner.scan()
-                
+
                 # Should follow symlink and read content
                 assert isinstance(context, dict)
             except OSError:

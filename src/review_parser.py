@@ -95,7 +95,8 @@ def _validate_review_item(item: dict) -> Optional[dict]:
     normalized_suggestion = None
     if suggestion_val is not None:
         if isinstance(suggestion_val, str) and suggestion_val.strip():
-            normalized_suggestion = suggestion_val.strip()
+            # Preserve leading indentation; only trim trailing whitespace
+            normalized_suggestion = suggestion_val.rstrip()
 
     result = {
         "file": file_val.strip(),

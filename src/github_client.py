@@ -18,6 +18,8 @@ import requests
 from github import Auth, Github
 from loguru import logger
 
+from src.utils import create_suggestion_fence
+
 
 def write_github_output(name: str, value: str) -> None:
     """Write an output for GitHub Actions.
@@ -92,7 +94,7 @@ def create_inline_review_comments(
         # Add suggestion block if present
         suggestion = item.get("suggestion")
         if suggestion:
-            body += f"\n```suggestion\n{suggestion}\n```"
+            body += create_suggestion_fence(suggestion)
 
         # Prepare API request data
         data = {

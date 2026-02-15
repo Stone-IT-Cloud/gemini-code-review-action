@@ -57,18 +57,33 @@ class TestValidateReviewItemWithSuggestion:
         assert result["comment"] == "Bug here"
         assert "suggestion" not in result
 
-    def test_suggestion_whitespace_trimmed(self):
-        """Test that suggestion whitespace is properly trimmed."""
+    def test_suggestion_trailing_whitespace_trimmed(self):
+        """Test that suggestion trailing whitespace is trimmed."""
         item = {
             "file": "main.py",
             "line": 10,
             "severity": "critical",
             "comment": "Fix this",
-            "suggestion": "  \n  result = x + 1  \n  "
+            "suggestion": "result = x + 1  \n  "
         }
         result = _validate_review_item(item)
         assert result is not None
         assert result["suggestion"] == "result = x + 1"
+
+    def test_suggestion_leading_whitespace_preserved(self):
+        """Test that suggestion leading whitespace is preserved."""
+        item = {
+            "file": "main.py",
+            "line": 10,
+            "severity": "critical",
+            "comment": "Fix indented code",
+            "suggestion": "    indented = True"
+        }
+        result = _validate_review_item(item)
+        assert result is not None
+        assert result["suggestion"] == "    indented = True"
+        # Verify leading spaces are preserved
+        assert result["suggestion"].startswith("    ")
 
     def test_empty_suggestion_excluded(self):
         """Test that empty suggestion string is excluded from result."""

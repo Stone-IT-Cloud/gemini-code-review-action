@@ -15,6 +15,7 @@ from typing import List
 from loguru import logger
 
 from src.review_parser import parse_review_response, strip_markdown_fences
+from src.utils import create_suggestion_fence
 
 # Severity mapping for filtering
 SEVERITY_MAP = {"trivial": 1, "important": 2, "critical": 3}
@@ -93,7 +94,7 @@ def format_review_comment(
 
             # Add GitHub inline suggestion if present
             if suggestion:
-                formatted_comment += f"\n```suggestion\n{suggestion}\n```"
+                formatted_comment += create_suggestion_fence(suggestion)
 
             lines.append(formatted_comment)
         structured_body = "\n\n".join(lines)

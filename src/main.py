@@ -168,8 +168,8 @@ def main(
             review_items=filtered_items,
         )
 
-        # Check if any failed
-        failed = [r for r in results if r.get("status") != "success"]
+        # Check if any failed (ignore skipped file-level comments)
+        failed = [r for r in results if r.get("status") in ("failed", "error")]
         if failed:
             logger.warning(
                 f"{len(failed)} inline comments failed to post. "

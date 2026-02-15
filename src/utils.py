@@ -9,6 +9,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import re
 from typing import List, Optional
 
 
@@ -16,7 +17,7 @@ def chunk_string(input_string: str, chunk_size: int) -> List[str]:
     """Chunk a string into pieces of at most *chunk_size* characters."""
     chunked_inputs = []
     for i in range(0, len(input_string), chunk_size):
-        chunked_inputs.append(input_string[i : i + chunk_size])
+        chunked_inputs.append(input_string[i:i + chunk_size])
     return chunked_inputs
 
 
@@ -60,3 +61,27 @@ def _get_usage_metadata(response) -> dict:
     if total_tokens is not None:
         out["total_tokens"] = int(total_tokens)
     return out
+
+
+def create_suggestion_fence(suggestion: str) -> str:
+    """Create a suggestion code block with dynamic fence sizing.
+
+    Ensures the fence cannot be terminated early by backticks in the
+    suggestion content. Uses a fence size that exceeds the longest
+    backtick run found in the suggestion.
+
+    Args:
+        suggestion: The code suggestion to wrap
+
+    Returns:
+        A formatted suggestion block with safe fence delimiters
+    """
+    # Find the longest sequence of backticks in the suggestion
+    backtick_runs = re.findall(r'`+', suggestion)
+    max_backticks = max((len(run) for run in backtick_runs), default=0)
+
+    # Use at least 3 backticks, but more if needed to exceed max found
+    fence_size = max(3, max_backticks + 1)
+    fence = '`' * fence_size
+
+    return f"\n{fence}suggestion\n{suggestion}\n{fence}"

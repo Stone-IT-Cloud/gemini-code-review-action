@@ -20,11 +20,13 @@ from src.config import AiReviewConfig, check_required_env_vars
 from src.gemini_client import get_review
 from src.github_client import (
     create_a_comment_to_pull_request,
+    create_inline_review_comments,
     get_all_pr_comments_text,
     write_github_output,
 )
 from src.prompts import get_review_prompt
-from src.review_formatter import format_review_comment
+from src.review_formatter import filter_by_severity, format_review_comment
+from src.review_parser import parse_review_response
 
 
 # pylint: disable=too-many-positional-arguments
@@ -123,6 +125,17 @@ def main(
     # Format reviews with severity filtering
     # Priority: CLI argument > environment variable > default
     min_severity = review_level or os.getenv("REVIEW_LEVEL", "IMPORTANT")
+
+    # Parse all review items from chunked responses
+    all_review_items = []
+    for chunk_text in chunked_reviews:
+        parsed_items = parse_review_response(chunk_text)
+        all_review_items.extend(parsed_items)
+
+    # Apply severity filtering
+    filtered_items = filter_by_severity(all_review_items, min_severity)
+
+    # Format for output (backward compatibility)
     review_comment = format_review_comment(
         summarized_review=summarized_review,
         chunked_reviews=chunked_reviews,
@@ -139,23 +152,67 @@ def main(
     # if it is running in a local environment don't try to create a comment
     if os.getenv("LOCAL") is not None:
         logger.info(f"Review comment: {review_comment}")
+        logger.info(f"Found {len(filtered_items)} review items to post")
         return
 
-    # Create a comment to a pull request
-    response = create_a_comment_to_pull_request(
-        github_token=os.getenv("GITHUB_TOKEN"),
-        github_repository=os.getenv("GITHUB_REPOSITORY"),
-        pull_request_number=int(os.getenv("GITHUB_PULL_REQUEST_NUMBER")),
-        git_commit_hash=os.getenv("GIT_COMMIT_HASH"),
-        body=review_comment,
-    )
-    if response.status_code >= 400:
-        logger.error(
-            f"Failed to post PR review comment: HTTP {response.status_code} - {response.text}"
+    # Post individual inline comments for items with file/line info
+    if filtered_items:
+        logger.info(
+            f"Posting {len(filtered_items)} individual inline review comments"
         )
-        raise RuntimeError(
-            f"GitHub API returned {response.status_code} when posting review comment"
+        results = create_inline_review_comments(
+            github_token=os.getenv("GITHUB_TOKEN"),
+            github_repository=os.getenv("GITHUB_REPOSITORY"),
+            pull_request_number=int(os.getenv("GITHUB_PULL_REQUEST_NUMBER")),
+            git_commit_hash=os.getenv("GIT_COMMIT_HASH"),
+            review_items=filtered_items,
         )
+
+        # Check if any failed (ignore skipped file-level comments)
+        failed = [r for r in results if r.get("status") in ("failed", "error")]
+        if failed:
+            logger.warning(
+                f"{len(failed)} inline comments failed to post. "
+                "Falling back to single review comment."
+            )
+            # Fall back to posting as single review if inline comments fail
+            response = create_a_comment_to_pull_request(
+                github_token=os.getenv("GITHUB_TOKEN"),
+                github_repository=os.getenv("GITHUB_REPOSITORY"),
+                pull_request_number=int(
+                    os.getenv("GITHUB_PULL_REQUEST_NUMBER")
+                ),
+                git_commit_hash=os.getenv("GIT_COMMIT_HASH"),
+                body=review_comment,
+            )
+            if response.status_code >= 400:
+                logger.error(
+                    f"Failed to post PR review comment: HTTP "
+                    f"{response.status_code} - {response.text}"
+                )
+                raise RuntimeError(
+                    f"GitHub API returned {response.status_code} when "
+                    "posting review comment"
+                )
+    else:
+        # No review items, post summary as single comment
+        logger.info("No review items found, posting summary only")
+        response = create_a_comment_to_pull_request(
+            github_token=os.getenv("GITHUB_TOKEN"),
+            github_repository=os.getenv("GITHUB_REPOSITORY"),
+            pull_request_number=int(os.getenv("GITHUB_PULL_REQUEST_NUMBER")),
+            git_commit_hash=os.getenv("GIT_COMMIT_HASH"),
+            body=review_comment,
+        )
+        if response.status_code >= 400:
+            logger.error(
+                f"Failed to post PR review comment: HTTP "
+                f"{response.status_code} - {response.text}"
+            )
+            raise RuntimeError(
+                f"GitHub API returned {response.status_code} when "
+                "posting review comment"
+            )
 
 
 if __name__ == "__main__":

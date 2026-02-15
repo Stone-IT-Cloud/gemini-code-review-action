@@ -18,6 +18,8 @@ import requests
 from github import Auth, Github
 from loguru import logger
 
+from src.utils import create_suggestion_fence
+
 
 def write_github_output(name: str, value: str) -> None:
     """Write an output for GitHub Actions.
@@ -32,6 +34,118 @@ def write_github_output(name: str, value: str) -> None:
     delimiter = f"ghadelim_{int(time.time() * 1000)}"
     with open(output_path, "a", encoding="utf-8") as f:
         f.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
+
+
+def create_inline_review_comments(
+    github_token: str,
+    github_repository: str,
+    pull_request_number: int,
+    git_commit_hash: str,
+    review_items: List[dict],
+) -> List[dict]:
+    """Create individual inline review comments for each review item.
+
+    Posts each review item as a separate inline comment using GitHub's
+    /pulls/{pr}/comments endpoint. This enables native "Commit suggestion"
+    buttons for items that include a suggestion field.
+
+    Args:
+        github_token: GitHub API token
+        github_repository: Repository in format owner/repo
+        pull_request_number: PR number
+        git_commit_hash: Commit SHA to comment on
+        review_items: List of review item dicts with file, line, comment,
+                      severity, and optional suggestion fields
+
+    Returns:
+        List of response dicts with status and error info for each comment
+    """
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "Authorization": f"Bearer {github_token}",
+        "Content-Type": "application/json",
+    }
+    url = (
+        f"https://api.github.com/repos/{github_repository}/"
+        f"pulls/{pull_request_number}/comments"
+    )
+
+    results = []
+    for item in review_items:
+        # Skip file-level comments (line 0) as they require different handling
+        if item.get("line", 0) == 0:
+            logger.info(
+                f"Skipping file-level comment for {item.get('file')} "
+                "(line 0 not supported for inline comments)"
+            )
+            results.append({
+                "file": item.get("file"),
+                "line": 0,
+                "status": "skipped",
+                "reason": "file-level comment not supported"
+            })
+            continue
+
+        # Build comment body with severity and message
+        severity = item.get("severity", "important").upper()
+        comment_text = item.get("comment", "")
+        body = f"**[{severity}]** {comment_text}"
+
+        # Add suggestion block if present
+        suggestion = item.get("suggestion")
+        if suggestion:
+            body += create_suggestion_fence(suggestion)
+
+        # Prepare API request data
+        data = {
+            "body": body,
+            "commit_id": git_commit_hash,
+            "path": item.get("file"),
+            "line": item.get("line"),
+            "side": "RIGHT",  # Comment on new changes (HEAD)
+        }
+
+        try:
+            response = requests.post(
+                url, headers=headers, data=json.dumps(data), timeout=30
+            )
+            if response.status_code == 201:
+                logger.info(
+                    f"Posted inline comment to {item.get('file')}:"
+                    f"{item.get('line')}"
+                )
+                results.append({
+                    "file": item.get("file"),
+                    "line": item.get("line"),
+                    "status": "success",
+                    "status_code": 201
+                })
+            else:
+                logger.error(
+                    f"Failed to post inline comment to {item.get('file')}:"
+                    f"{item.get('line')} - HTTP {response.status_code}: "
+                    f"{response.text}"
+                )
+                results.append({
+                    "file": item.get("file"),
+                    "line": item.get("line"),
+                    "status": "failed",
+                    "status_code": response.status_code,
+                    "error": response.text
+                })
+        except Exception as exc:
+            logger.error(
+                f"Exception posting inline comment to {item.get('file')}:"
+                f"{item.get('line')}: {exc}"
+            )
+            results.append({
+                "file": item.get("file"),
+                "line": item.get("line"),
+                "status": "error",
+                "error": str(exc)
+            })
+
+    return results
 
 
 def create_a_comment_to_pull_request(

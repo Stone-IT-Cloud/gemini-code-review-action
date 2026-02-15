@@ -15,6 +15,7 @@ from typing import List
 from loguru import logger
 
 from src.review_parser import parse_review_response, strip_markdown_fences
+from src.utils import create_suggestion_fence
 
 # Severity mapping for filtering
 SEVERITY_MAP = {"trivial": 1, "important": 2, "critical": 3}
@@ -86,8 +87,16 @@ def format_review_comment(
             file_name = item["file"]
             line_num = item["line"]
             comment = item["comment"]
+            suggestion = item.get("suggestion")
+
             loc = f"{file_name}:{line_num}" if line_num != 0 else file_name
-            lines.append(f"**[{severity}]** `{loc}`: {comment}")
+            formatted_comment = f"**[{severity}]** `{loc}`: {comment}"
+
+            # Add GitHub inline suggestion if present
+            if suggestion:
+                formatted_comment += create_suggestion_fence(suggestion)
+
+            lines.append(formatted_comment)
         structured_body = "\n\n".join(lines)
     elif any_parsed:
         # All chunks were valid JSON but had no review items.

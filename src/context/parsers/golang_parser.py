@@ -25,12 +25,12 @@ class GolangParser(BaseParser):
         result = {"type": "go.mod"}
 
         # Extract module name
-        module_match = re.search(r'^module\s+(\S+)', content, re.MULTILINE)
+        module_match = re.search(r"^module\s+(\S+)", content, re.MULTILINE)
         if module_match:
             result["module"] = module_match.group(1)
 
         # Extract Go version
-        go_match = re.search(r'^go\s+(\S+)', content, re.MULTILINE)
+        go_match = re.search(r"^go\s+(\S+)", content, re.MULTILINE)
         if go_match:
             result["go_version"] = go_match.group(1)
 
@@ -38,17 +38,17 @@ class GolangParser(BaseParser):
         deps = []
 
         # Handle parenthesized require blocks: require ( ... )
-        require_block = re.search(r'require\s*\((.*?)\)', content, re.DOTALL)
+        require_block = re.search(r"require\s*\((.*?)\)", content, re.DOTALL)
         if require_block:
-            for line in require_block.group(1).split('\n'):
+            for line in require_block.group(1).split("\n"):
                 line = line.strip()
-                if line and not line.startswith('//'):
+                if line and not line.startswith("//"):
                     parts = line.split()
                     if len(parts) >= 2:
                         deps.append(f"{parts[0]} {parts[1]}")
 
         # Handle single-line require statements: require module version
-        for match in re.finditer(r'^require\s+(?!\()(\S+)\s+(\S+)', content, re.MULTILINE):
+        for match in re.finditer(r"^require\s+(?!\()(\S+)\s+(\S+)", content, re.MULTILINE):
             module_name, version = match.groups()
             deps.append(f"{module_name} {version}")
 

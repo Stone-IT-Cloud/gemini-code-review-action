@@ -26,25 +26,25 @@ class KubernetesParser(BaseParser):
 
         # Extract metadata.name (prefer name inside metadata: block)
         metadata_block_match = re.search(
-            r'^metadata:\s*\n((?:[ \t].*\n?)*)', content, re.MULTILINE
+            r"^metadata:\s*\n((?:[ \t].*\n?)*)", content, re.MULTILINE
         )
         name_match = None
         if metadata_block_match:
             metadata_block = metadata_block_match.group(1)
-            name_match = re.search(r'^\s*name:\s*(.+)$', metadata_block, re.MULTILINE)
+            name_match = re.search(r"^\s*name:\s*(.+)$", metadata_block, re.MULTILINE)
         if not name_match:
             # Fall back to a global search if metadata block not found
-            name_match = re.search(r'^\s*name:\s*(.+)$', content, re.MULTILINE)
+            name_match = re.search(r"^\s*name:\s*(.+)$", content, re.MULTILINE)
         if name_match:
             result["name"] = name_match.group(1).strip()
 
         # Extract kind
-        kind_match = re.search(r'^kind:\s*(.+)$', content, re.MULTILINE)
+        kind_match = re.search(r"^kind:\s*(.+)$", content, re.MULTILINE)
         if kind_match:
             result["kind"] = kind_match.group(1).strip()
 
         # Extract container images
-        images = re.findall(r'image:\s*(.+)', content)
+        images = re.findall(r"image:\s*(.+)", content)
         if images:
             result["container_images"] = [img.strip() for img in images[:5]]
 

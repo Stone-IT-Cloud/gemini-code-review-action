@@ -25,12 +25,12 @@ class DockerParser(BaseParser):
         result = {"type": "Dockerfile"}
 
         # Extract base images
-        from_statements = re.findall(r'^FROM\s+(.+?)(?:\s+as\s+.+)?$', content, re.MULTILINE | re.IGNORECASE)
+        from_statements = re.findall(r"^FROM\s+(.+?)(?:\s+as\s+.+)?$", content, re.MULTILINE | re.IGNORECASE)
         if from_statements:
             result["base_images"] = from_statements
 
         # Extract exposed ports
-        expose_statements = re.findall(r'^EXPOSE\s+(.+)$', content, re.MULTILINE | re.IGNORECASE)
+        expose_statements = re.findall(r"^EXPOSE\s+(.+)$", content, re.MULTILINE | re.IGNORECASE)
         if expose_statements:
             result["exposed_ports"] = expose_statements
 
@@ -45,12 +45,12 @@ class DockerComposeParser(BaseParser):
         result = {"type": "docker-compose.yml"}
 
         # Extract service names
-        services_match = re.search(r'services:(.*?)(?:\n\S|\Z)', content, re.DOTALL)
+        services_match = re.search(r"services:(.*?)(?:\n\S|\Z)", content, re.DOTALL)
         if services_match:
-            service_lines = services_match.group(1).split('\n')
+            service_lines = services_match.group(1).split("\n")
             services = []
             for line in service_lines:
-                service_match = re.match(r'\s+([A-Za-z0-9_-]+)\s*:', line)
+                service_match = re.match(r"\s+([A-Za-z0-9_-]+)\s*:", line)
                 if service_match:
                     services.append(service_match.group(1))
             if services:

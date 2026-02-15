@@ -25,17 +25,17 @@ class HelmParser(BaseParser):
         result = {"type": "Chart.yaml"}
 
         # Extract chart name
-        name_match = re.search(r'name:\s*(.+)', content)
+        name_match = re.search(r"name:\s*(.+)", content)
         if name_match:
             result["name"] = name_match.group(1).strip()
 
         # Extract version
-        version_match = re.search(r'version:\s*(.+)', content)
+        version_match = re.search(r"version:\s*(.+)", content)
         if version_match:
             result["version"] = version_match.group(1).strip()
 
         # Extract appVersion
-        app_version_match = re.search(r'appVersion:\s*(.+)', content)
+        app_version_match = re.search(r"appVersion:\s*(.+)", content)
         if app_version_match:
             result["appVersion"] = app_version_match.group(1).strip()
 

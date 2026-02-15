@@ -25,22 +25,22 @@ class MavenParser(BaseParser):
         result = {"type": "pom.xml"}
 
         # Extract groupId
-        group_match = re.search(r'<groupId>(.*?)</groupId>', content)
+        group_match = re.search(r"<groupId>(.*?)</groupId>", content)
         if group_match:
             result["groupId"] = group_match.group(1)
 
         # Extract artifactId
-        artifact_match = re.search(r'<artifactId>(.*?)</artifactId>', content)
+        artifact_match = re.search(r"<artifactId>(.*?)</artifactId>", content)
         if artifact_match:
             result["artifactId"] = artifact_match.group(1)
 
         # Extract Java version property
-        java_version_match = re.search(r'<java\.version>(.*?)</java\.version>', content)
+        java_version_match = re.search(r"<java\.version>(.*?)</java\.version>", content)
         if java_version_match:
             result["java_version"] = java_version_match.group(1)
 
         # Extract Maven compiler source
-        maven_compiler_match = re.search(r'<maven\.compiler\.source>(.*?)</maven\.compiler\.source>', content)
+        maven_compiler_match = re.search(r"<maven\.compiler\.source>(.*?)</maven\.compiler\.source>", content)
         if maven_compiler_match:
             result["compiler_source"] = maven_compiler_match.group(1)
 
@@ -60,7 +60,7 @@ class GradleParser(BaseParser):
             result["sourceCompatibility"] = source_compat_match.group(1)
 
         # Look for dependencies block
-        deps_match = re.search(r'dependencies\s*\{(.*?)\}', content, re.DOTALL)
+        deps_match = re.search(r"dependencies\s*\{(.*?)\}", content, re.DOTALL)
         if deps_match:
             result["dependencies_snippet"] = deps_match.group(1)[:500]
 

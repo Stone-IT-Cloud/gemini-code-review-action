@@ -94,7 +94,7 @@ class ContextScanner:
             try:
                 parser = PythonRequirementsParser()
                 self.context["python_requirements"] = parser.parse(content)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.debug(f"Failed to parse requirements.txt: {exc}")
 
         # Pipfile
@@ -104,7 +104,7 @@ class ContextScanner:
             try:
                 parser = PythonPipfileParser()
                 self.context["python_pipfile"] = parser.parse(content)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.debug(f"Failed to parse Pipfile: {exc}")
 
         # pyproject.toml
@@ -114,7 +114,7 @@ class ContextScanner:
             try:
                 parser = PythonPyprojectParser()
                 self.context["python_pyproject"] = parser.parse(content)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.debug(f"Failed to parse pyproject.toml: {exc}")
 
     def _scan_php(self) -> None:
@@ -125,7 +125,7 @@ class ContextScanner:
             try:
                 parser = PHPParser()
                 self.context["php_composer"] = parser.parse(content)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.debug(f"Failed to parse composer.json: {exc}")
 
     def _scan_javascript(self) -> None:
@@ -136,7 +136,7 @@ class ContextScanner:
             try:
                 parser = JavaScriptParser()
                 self.context["javascript_package"] = parser.parse(content)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.debug(f"Failed to parse package.json: {exc}")
 
     def _scan_golang(self) -> None:
@@ -147,7 +147,7 @@ class ContextScanner:
             try:
                 parser = GolangParser()
                 self.context["golang_mod"] = parser.parse(content)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.debug(f"Failed to parse go.mod: {exc}")
 
     def _scan_ruby(self) -> None:
@@ -158,7 +158,7 @@ class ContextScanner:
             try:
                 parser = RubyParser()
                 self.context["ruby_gemfile"] = parser.parse(content)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.debug(f"Failed to parse Gemfile: {exc}")
 
     def _scan_java(self) -> None:
@@ -170,7 +170,7 @@ class ContextScanner:
             try:
                 parser = MavenParser()
                 self.context["java_pom"] = parser.parse(content)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.debug(f"Failed to parse pom.xml: {exc}")
 
         # Gradle build.gradle
@@ -180,7 +180,7 @@ class ContextScanner:
             try:
                 parser = GradleParser()
                 self.context["java_gradle"] = parser.parse(content)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.debug(f"Failed to parse build.gradle: {exc}")
 
     def _scan_dotnet(self) -> None:
@@ -195,7 +195,7 @@ class ContextScanner:
                         key = f"dotnet_{proj_file.stem}"
                         self.context[key] = parser.parse(content)
                         return  # Exit function after parsing first project file
-                    except Exception as exc:  # pylint: disable=broad-except
+                    except Exception as exc:
                         logger.debug(f"Failed to parse {proj_file}: {exc}")
 
     def _scan_rust(self) -> None:
@@ -206,7 +206,7 @@ class ContextScanner:
             try:
                 parser = RustParser()
                 self.context["rust_cargo"] = parser.parse(content)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.debug(f"Failed to parse Cargo.toml: {exc}")
 
     def _scan_docker(self) -> None:
@@ -218,7 +218,7 @@ class ContextScanner:
             try:
                 parser = DockerParser()
                 self.context["docker_dockerfile"] = parser.parse(content)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.debug(f"Failed to parse Dockerfile: {exc}")
 
         # docker-compose files (v1 and v2 naming conventions)
@@ -236,42 +236,48 @@ class ContextScanner:
                     parser = DockerComposeParser()
                     self.context["docker_compose"] = parser.parse(content)
                     break
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:
                     logger.debug(f"Failed to parse {compose_name}: {exc}")
 
     def _scan_kubernetes(self) -> None:
         """Scan for Kubernetes configuration files."""
-        # Look for common k8s directories
-        k8s_dirs = ["k8s", "kubernetes", ".kube"]
+        # Scan YAML files across the entire repo, focusing on specific Kubernetes kinds
+        target_kinds = {"Deployment", "StatefulSet", "Service"}
         k8s_resources = []
+        max_resources = 10
+        max_files_scanned = 200
+        files_scanned = 0
 
-        for dir_name in k8s_dirs:
-            k8s_dir = self.repo_root / dir_name
-            if k8s_dir.exists() and k8s_dir.is_dir():
-                # Parse YAML files in k8s directory
-                for yaml_file in list(k8s_dir.glob("*.yaml")) + list(k8s_dir.glob("*.yml")):
-                    content = self._read_file_limited(yaml_file)
-                    if content is not None:
-                        try:
-                            parser = KubernetesParser()
-                            parsed = parser.parse(content)
-                            parsed["filename"] = yaml_file.name
-                            k8s_resources.append(parsed)
+        # Walk the repository and look for *.yaml / *.yml files
+        for path in self.repo_root.rglob("*"):
+            if not path.is_file():
+                continue
 
-                            # Stop processing more files once we reach 10 resources
-                            if len(k8s_resources) >= 10:
-                                break
-                        except Exception as exc:  # pylint: disable=broad-except
-                            logger.debug(f"Failed to parse {yaml_file}: {exc}")
+            if path.suffix not in (".yaml", ".yml"):
+                continue
 
-                # Exit if we've collected enough resources
-                if len(k8s_resources) >= 10:
-                    break
+            files_scanned += 1
+            if files_scanned > max_files_scanned or len(k8s_resources) >= max_resources:
+                break
+
+            content = self._read_file_limited(path)
+            if content is None:
+                continue
+
+            try:
+                parser = KubernetesParser()
+                parsed = parser.parse(content)
+                kind = parsed.get("kind")
+                if kind in target_kinds:
+                    parsed["filename"] = path.name
+                    k8s_resources.append(parsed)
+            except Exception as exc:
+                logger.debug(f"Failed to parse {path}: {exc}")
 
         if k8s_resources:
             self.context["kubernetes_resources"] = {
                 "type": "kubernetes",
-                "resources": k8s_resources[:10]
+                "resources": k8s_resources[:max_resources]
             }
 
     def _scan_helm(self) -> None:
@@ -283,18 +289,18 @@ class ContextScanner:
             try:
                 parser = HelmParser()
                 self.context["helm_chart"] = parser.parse(content)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.debug(f"Failed to parse Chart.yaml: {exc}")
 
         # Look for values.yaml and extract first 50 lines for global config
         values_path = self.repo_root / "values.yaml"
         content = self._read_file_limited(values_path)
         if content is not None:
-            # Store first few lines as they often contain global config
-            lines = content.split('\n')[:10]  # First 10 lines as preview
+            # Store first 50 lines as they often contain global config
+            lines = content.split("\n")[:50]  # First 50 lines as preview
             self.context["helm_values"] = {
                 "type": "values.yaml",
-                "preview": '\n'.join(lines)
+                "preview": "\n".join(lines)
             }
 
     def _scan_terraform(self) -> None:
@@ -315,7 +321,7 @@ class ContextScanner:
                     parser = TerraformParser()
                     self.context["terraform"] = parser.parse(content)
                     self.context["terraform"]["files_found"] = [f.name for f in tf_files[:10]]
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:
                     logger.debug(f"Failed to parse {selected_tf}: {exc}")
 
     def _scan_documentation(self) -> None:
@@ -328,11 +334,10 @@ class ContextScanner:
             doc_path = self.repo_root / doc_file
             content = self._read_file_limited(doc_path)
             if content:
-                # Extract first paragraph or first 200 chars
-                first_para = content.split('\n\n')[0]
-                if len(first_para) > 200:
-                    first_para = first_para[:200] + "..."
-                docs[doc_file] = first_para
+                # Extract first ~2000 chars for better context
+                if len(content) > 2000:
+                    content = content[:2000] + "..."
+                docs[doc_file] = content
 
         # Scan docs/ directory for additional documentation (top 2 files)
         docs_dir = self.repo_root / "docs"
@@ -341,10 +346,10 @@ class ContextScanner:
             for doc_file in md_files:
                 content = self._read_file_limited(doc_file)
                 if content:
-                    first_para = content.split('\n\n')[0]
-                    if len(first_para) > 200:
-                        first_para = first_para[:200] + "..."
-                    docs[f"docs/{doc_file.name}"] = first_para
+                    # Extract first ~2000 chars for better context
+                    if len(content) > 2000:
+                        content = content[:2000] + "..."
+                    docs[f"docs/{doc_file.name}"] = content
 
         if docs:
             self.context["documentation"] = {

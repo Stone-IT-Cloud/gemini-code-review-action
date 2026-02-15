@@ -677,15 +677,15 @@ Run npm install.
         """Test that long README is truncated."""
         with tempfile.TemporaryDirectory() as tmpdir:
             readme = Path(tmpdir) / "README.md"
-            # Create a very long first paragraph
-            long_text = "x" * 300
+            # Create a very long first paragraph (3000 characters)
+            long_text = "x" * 3000
             readme.write_text(long_text)
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
 
-            # Should be truncated to 200 chars + "..."
-            assert len(context["documentation"]["files"]["README.md"]) <= 203
+            # Should be truncated to 2000 chars + "..." = 2003
+            assert len(context["documentation"]["files"]["README.md"]) <= 2003
 
 
 class TestContextSummary:

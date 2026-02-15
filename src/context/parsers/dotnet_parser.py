@@ -25,7 +25,7 @@ class DotNetParser(BaseParser):
         result = {"type": "dotnet_project"}
 
         # Extract target framework
-        framework_match = re.search(r'<TargetFramework>(.*?)</TargetFramework>', content)
+        framework_match = re.search(r"<TargetFramework>(.*?)</TargetFramework>", content)
         if framework_match:
             result["target_framework"] = framework_match.group(1)
 

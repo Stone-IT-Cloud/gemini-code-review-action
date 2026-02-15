@@ -37,10 +37,10 @@ class PythonRequirementsParser(BaseParser):
         if not content.strip():
             return {"type": "requirements.txt", "packages": []}
 
-        lines = [line.strip() for line in content.split('\n')]
+        lines = [line.strip() for line in content.split("\n")]
         packages = [
             line for line in lines
-            if line and not line.startswith('#') and not line.startswith('-')
+            if line and not line.startswith("#") and not line.startswith("-")
         ]
         return {"type": "requirements.txt", "packages": packages[:20]}
 
@@ -75,24 +75,21 @@ class PythonPyprojectParser(BaseParser):
         if poetry_deps:
             result["poetry_dependencies"] = poetry_deps[:500]
 
-        # Parse PEP 621 dependencies from [project] table
-        # dependencies is a key (array) inside [project], not a separate table
-        project_section = _parse_toml_section(content, "project.dependencies")
-        if project_section:
-            result["project_dependencies"] = project_section[:500]
-        else:
-            # Try parsing dependencies array directly from [project] section
-            project_match = re.search(r'\[project\](.*?)(?=\n\[|\Z)', content, re.DOTALL)
-            if project_match:
-                project_content = project_match.group(1)
-                deps_match = re.search(
-                    r'dependencies\s*=\s*\[(.*?)\]', project_content, re.DOTALL
-                )
-                if deps_match:
-                    deps_str = deps_match.group(1)
-                    # Parse array items (simple quoted strings)
-                    deps = re.findall(r'["\']([^"\']+)["\']', deps_str)
-                    if deps:
-                        result["project_dependencies"] = deps[:500]
+        # Parse PEP 621 dependencies from [project] table.
+        # In PEP 621, dependencies is an array key inside [project],
+        # not a separate [project.dependencies] table.
+        project_match = re.search(r"\[project\](.*?)(?=\n\[|\Z)", content, re.DOTALL)
+        if project_match:
+            project_content = project_match.group(1)
+            deps_match = re.search(
+                r"dependencies\s*=\s*\[(.*?)\]", project_content, re.DOTALL
+            )
+            if deps_match:
+                deps_str = deps_match.group(1)
+                # Parse array items (simple quoted strings)
+                deps = re.findall(r"[\"']([^\"']+)[\"']", deps_str)
+                if deps:
+                    # Always expose project_dependencies as a list of strings
+                    result["project_dependencies"] = deps[:500]
 
         return result

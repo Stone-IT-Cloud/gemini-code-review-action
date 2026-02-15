@@ -483,11 +483,41 @@ services:
   api:
     build: .
 """)
-            
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "docker_compose" in context
+
+    def test_scan_compose_yml_v2(self):
+        """Test scanning compose.yml (Docker Compose V2 naming)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            compose = Path(tmpdir) / "compose.yml"
+            compose.write_text("""services:
+  web:
+    image: nginx
+""")
+
+            scanner = ContextScanner(tmpdir)
+            context = scanner.scan()
+
+            assert "docker_compose" in context
+            assert "web" in context["docker_compose"]["services"]
+
+    def test_scan_compose_yaml_v2(self):
+        """Test scanning compose.yaml (Docker Compose V2 naming)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            compose = Path(tmpdir) / "compose.yaml"
+            compose.write_text("""services:
+  app:
+    build: .
+""")
+
+            scanner = ContextScanner(tmpdir)
+            context = scanner.scan()
+
+            assert "docker_compose" in context
+            assert "app" in context["docker_compose"]["services"]
 
 
 class TestKubernetesScanning:
@@ -498,24 +528,41 @@ class TestKubernetesScanning:
         with tempfile.TemporaryDirectory() as tmpdir:
             k8s_dir = Path(tmpdir) / "k8s"
             k8s_dir.mkdir()
-            
-            (k8s_dir / "deployment.yaml").write_text("apiVersion: apps/v1\nkind: Deployment")
-            (k8s_dir / "service.yml").write_text("apiVersion: v1\nkind: Service")
-            
+
+            (k8s_dir / "deployment.yaml").write_text("""apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  template:
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.19
+""")
+            (k8s_dir / "service.yml").write_text("""apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+""")
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
-            assert "kubernetes_files" in context
-            assert "deployment.yaml" in context["kubernetes_files"]["files"]
-            assert "service.yml" in context["kubernetes_files"]["files"]
+
+            assert "kubernetes_resources" in context
+            resources = context["kubernetes_resources"]["resources"]
+            assert len(resources) == 2
+            # Check that metadata was extracted
+            names = [r.get("name") for r in resources]
+            assert "my-app" in names or "my-service" in names
 
     def test_scan_no_kubernetes_files(self):
         """Test when no Kubernetes files exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
-            assert "kubernetes_files" not in context
+
+            assert "kubernetes_resources" not in context
 
 
 class TestHelmScanning:
@@ -540,16 +587,17 @@ appVersion: "2.0"
             assert context["helm_chart"]["appVersion"] == '"2.0"'
 
     def test_scan_helm_values(self):
-        """Test detecting values.yaml."""
+        """Test detecting and extracting values.yaml."""
         with tempfile.TemporaryDirectory() as tmpdir:
             values = Path(tmpdir) / "values.yaml"
-            values.write_text("replicaCount: 3")
-            
+            values.write_text("replicaCount: 3\nimage:\n  repository: nginx")
+
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
-            
+
             assert "helm_values" in context
-            assert context["helm_values"]["exists"] is True
+            assert "preview" in context["helm_values"]
+            assert "replicaCount" in context["helm_values"]["preview"]
 
 
 class TestTerraformScanning:

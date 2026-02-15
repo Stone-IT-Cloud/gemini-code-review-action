@@ -17,6 +17,7 @@ from src.context.parsers.golang_parser import GolangParser
 from src.context.parsers.helm_parser import HelmParser
 from src.context.parsers.java_parser import MavenParser, GradleParser
 from src.context.parsers.javascript_parser import JavaScriptParser
+from src.context.parsers.kubernetes_parser import KubernetesParser
 from src.context.parsers.php_parser import PHPParser
 from src.context.parsers.python_parser import (
     PythonRequirementsParser,
@@ -35,6 +36,7 @@ __all__ = [
     "GradleParser",
     "HelmParser",
     "JavaScriptParser",
+    "KubernetesParser",
     "MavenParser",
     "PHPParser",
     "PythonPipfileParser",

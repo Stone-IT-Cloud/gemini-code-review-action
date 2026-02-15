@@ -24,6 +24,7 @@ from src.context.parsers import (
     GradleParser,
     HelmParser,
     JavaScriptParser,
+    KubernetesParser,
     MavenParser,
     PHPParser,
     PythonPipfileParser,
@@ -96,7 +97,7 @@ class ContextScanner:
         # Pipfile
         pipfile_path = self.repo_root / "Pipfile"
         content = self._read_file_limited(pipfile_path)
-        if content:
+        if content is not None:
             try:
                 parser = PythonPipfileParser()
                 self.context["python_pipfile"] = parser.parse(content)
@@ -106,7 +107,7 @@ class ContextScanner:
         # pyproject.toml
         pyproject_path = self.repo_root / "pyproject.toml"
         content = self._read_file_limited(pyproject_path)
-        if content:
+        if content is not None:
             try:
                 parser = PythonPyprojectParser()
                 self.context["python_pyproject"] = parser.parse(content)
@@ -117,7 +118,7 @@ class ContextScanner:
         """Scan for PHP configuration files."""
         composer_path = self.repo_root / "composer.json"
         content = self._read_file_limited(composer_path)
-        if content:
+        if content is not None:
             try:
                 parser = PHPParser()
                 self.context["php_composer"] = parser.parse(content)
@@ -128,7 +129,7 @@ class ContextScanner:
         """Scan for JavaScript/TypeScript configuration files."""
         package_path = self.repo_root / "package.json"
         content = self._read_file_limited(package_path)
-        if content:
+        if content is not None:
             try:
                 parser = JavaScriptParser()
                 self.context["javascript_package"] = parser.parse(content)
@@ -139,7 +140,7 @@ class ContextScanner:
         """Scan for Golang configuration files."""
         gomod_path = self.repo_root / "go.mod"
         content = self._read_file_limited(gomod_path)
-        if content:
+        if content is not None:
             try:
                 parser = GolangParser()
                 self.context["golang_mod"] = parser.parse(content)
@@ -150,7 +151,7 @@ class ContextScanner:
         """Scan for Ruby configuration files."""
         gemfile_path = self.repo_root / "Gemfile"
         content = self._read_file_limited(gemfile_path)
-        if content:
+        if content is not None:
             try:
                 parser = RubyParser()
                 self.context["ruby_gemfile"] = parser.parse(content)
@@ -162,7 +163,7 @@ class ContextScanner:
         # Maven pom.xml
         pom_path = self.repo_root / "pom.xml"
         content = self._read_file_limited(pom_path)
-        if content:
+        if content is not None:
             try:
                 parser = MavenParser()
                 self.context["java_pom"] = parser.parse(content)
@@ -172,7 +173,7 @@ class ContextScanner:
         # Gradle build.gradle
         gradle_path = self.repo_root / "build.gradle"
         content = self._read_file_limited(gradle_path)
-        if content:
+        if content is not None:
             try:
                 parser = GradleParser()
                 self.context["java_gradle"] = parser.parse(content)
@@ -185,7 +186,7 @@ class ContextScanner:
         for pattern in ["*.csproj", "*.fsproj", "*.vbproj"]:
             for proj_file in self.repo_root.glob(pattern):
                 content = self._read_file_limited(proj_file)
-                if content:
+                if content is not None:
                     try:
                         parser = DotNetParser()
                         key = f"dotnet_{proj_file.stem}"
@@ -198,7 +199,7 @@ class ContextScanner:
         """Scan for Rust configuration files."""
         cargo_path = self.repo_root / "Cargo.toml"
         content = self._read_file_limited(cargo_path)
-        if content:
+        if content is not None:
             try:
                 parser = RustParser()
                 self.context["rust_cargo"] = parser.parse(content)
@@ -210,18 +211,24 @@ class ContextScanner:
         # Dockerfile
         dockerfile_path = self.repo_root / "Dockerfile"
         content = self._read_file_limited(dockerfile_path)
-        if content:
+        if content is not None:
             try:
                 parser = DockerParser()
                 self.context["docker_dockerfile"] = parser.parse(content)
             except Exception as exc:  # pylint: disable=broad-except
                 logger.debug(f"Failed to parse Dockerfile: {exc}")
 
-        # docker-compose.yml
-        for compose_name in ["docker-compose.yml", "docker-compose.yaml"]:
+        # docker-compose files (v1 and v2 naming conventions)
+        compose_files = [
+            "docker-compose.yml",
+            "docker-compose.yaml",
+            "compose.yml",
+            "compose.yaml"
+        ]
+        for compose_name in compose_files:
             compose_path = self.repo_root / compose_name
             content = self._read_file_limited(compose_path)
-            if content:
+            if content is not None:
                 try:
                     parser = DockerComposeParser()
                     self.context["docker_compose"] = parser.parse(content)
@@ -233,21 +240,31 @@ class ContextScanner:
         """Scan for Kubernetes configuration files."""
         # Look for common k8s directories
         k8s_dirs = ["k8s", "kubernetes", ".kube"]
-        k8s_files = []
+        k8s_resources = []
 
         for dir_name in k8s_dirs:
             k8s_dir = self.repo_root / dir_name
             if k8s_dir.exists() and k8s_dir.is_dir():
-                # Find yaml files in k8s directory
-                for yaml_file in k8s_dir.glob("*.yaml"):
-                    k8s_files.append(yaml_file.name)
-                for yml_file in k8s_dir.glob("*.yml"):
-                    k8s_files.append(yml_file.name)
+                # Parse YAML files in k8s directory
+                for yaml_file in list(k8s_dir.glob("*.yaml")) + list(k8s_dir.glob("*.yml")):
+                    content = self._read_file_limited(yaml_file)
+                    if content is not None:
+                        try:
+                            parser = KubernetesParser()
+                            parsed = parser.parse(content)
+                            parsed["filename"] = yaml_file.name
+                            k8s_resources.append(parsed)
+                        except Exception as exc:  # pylint: disable=broad-except
+                            logger.debug(f"Failed to parse {yaml_file}: {exc}")
 
-        if k8s_files:
-            self.context["kubernetes_files"] = {
+                # Limit to first 10 parsed resources
+                if len(k8s_resources) >= 10:
+                    break
+
+        if k8s_resources:
+            self.context["kubernetes_resources"] = {
                 "type": "kubernetes",
-                "files": k8s_files[:20]  # Limit to 20 files
+                "resources": k8s_resources[:10]
             }
 
     def _scan_helm(self) -> None:
@@ -255,19 +272,22 @@ class ContextScanner:
         # Look for Chart.yaml
         chart_path = self.repo_root / "Chart.yaml"
         content = self._read_file_limited(chart_path)
-        if content:
+        if content is not None:
             try:
                 parser = HelmParser()
                 self.context["helm_chart"] = parser.parse(content)
             except Exception as exc:  # pylint: disable=broad-except
                 logger.debug(f"Failed to parse Chart.yaml: {exc}")
 
-        # Look for values.yaml
+        # Look for values.yaml and extract first 50 lines for global config
         values_path = self.repo_root / "values.yaml"
-        if values_path.exists():
+        content = self._read_file_limited(values_path)
+        if content is not None:
+            # Store first few lines as they often contain global config
+            lines = content.split('\n')[:10]  # First 10 lines as preview
             self.context["helm_values"] = {
                 "type": "values.yaml",
-                "exists": True
+                "preview": '\n'.join(lines)
             }
 
     def _scan_terraform(self) -> None:
@@ -277,7 +297,7 @@ class ContextScanner:
         if tf_files:
             # Parse the first .tf file found
             content = self._read_file_limited(tf_files[0])
-            if content:
+            if content is not None:
                 try:
                     parser = TerraformParser()
                     self.context["terraform"] = parser.parse(content)

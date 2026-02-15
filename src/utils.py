@@ -77,11 +77,11 @@ def create_suggestion_fence(suggestion: str) -> str:
         A formatted suggestion block with safe fence delimiters
     """
     # Find the longest sequence of backticks in the suggestion
-    backtick_runs = re.findall(r'`+', suggestion)
+    backtick_runs = re.findall(r"`+", suggestion)
     max_backticks = max((len(run) for run in backtick_runs), default=0)
 
     # Use at least 3 backticks, but more if needed to exceed max found
     fence_size = max(3, max_backticks + 1)
-    fence = '`' * fence_size
+    fence = "`" * fence_size
 
     return f"\n{fence}suggestion\n{suggestion}\n{fence}"

@@ -134,6 +134,8 @@ def create_inline_review_comments(
                     "error": response.text
                 })
         except Exception as exc:
+            # Catch all exceptions to ensure we never fail the entire review
+            # due to issues posting a single comment
             logger.error(
                 f"Exception posting inline comment to {item.get('file')}:"
                 f"{item.get('line')}: {exc}"

@@ -9,6 +9,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import re
 from typing import List, Optional
 
 
@@ -75,8 +76,6 @@ def create_suggestion_fence(suggestion: str) -> str:
     Returns:
         A formatted suggestion block with safe fence delimiters
     """
-    import re
-
     # Find the longest sequence of backticks in the suggestion
     backtick_runs = re.findall(r'`+', suggestion)
     max_backticks = max((len(run) for run in backtick_runs), default=0)

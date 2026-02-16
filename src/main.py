@@ -184,13 +184,6 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
         print("=" * 80)
     print()
 
-    if summarized_review:
-        print("=" * 80)
-        print(f"{BOLD}Overall Summary:{RESET}")
-        print(summarized_review)
-        print("=" * 80)
-    print()
-
 
 # pylint: disable=too-many-positional-arguments,too-many-locals,broad-exception-caught
 @click.command()

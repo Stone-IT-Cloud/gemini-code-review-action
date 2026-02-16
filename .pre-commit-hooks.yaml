@@ -14,7 +14,7 @@
   name: Gemini AI Code Review
   description: Use Gemini AI to review staged files before commit.
   language: docker_image
-  entry: python3 /app/src/main.py --local
+  entry: --local
   types: [text]
   pass_filenames: true
   # Requires the user to set GEMINI_API_KEY in their local shell

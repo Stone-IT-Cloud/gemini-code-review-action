@@ -260,7 +260,7 @@ By default, only CRITICAL issues block commits. You can customize this in your `
 
 ```yaml
 - id: gemini-code-review
-  args: ['--review-level=IMPORTANT']  # Block on IMPORTANT and CRITICAL
+  args: ['--review-level=IMPORTANT']  # Show IMPORTANT and CRITICAL (only CRITICAL blocks)
 ```
 
 **Bypassing the hook (when needed):**

@@ -30,9 +30,9 @@ class TestReviewLevelCLI:
         self, mock_check_env, mock_format, mock_get_review, mock_genai
     ):
         """Test that --review-level CLI parameter is used."""
-        # Setup mocks
+        # Setup mocks - use IMPORTANT instead of CRITICAL to avoid exit(1)
         mock_get_review.return_value = (
-            ['[{"file": "test.py", "line": 1, "severity": "critical", "comment": "Bug"}]'],
+            ['[{"file": "test.py", "line": 1, "severity": "important", "comment": "Bug"}]'],
             "Summary",
         )
         mock_format.return_value = "Formatted review"
@@ -60,7 +60,7 @@ class TestReviewLevelCLI:
                 ],
             )
 
-            # Verify the command succeeded
+            # Verify the command succeeded (no critical issues)
             assert result.exit_code == 0, f"Command failed: {result.output}"
 
             # Verify format_review_comment was called with CRITICAL
@@ -137,9 +137,9 @@ class TestReviewLevelCLI:
         self, mock_check_env, mock_format, mock_get_review, mock_genai
     ):
         """Test that CLI parameter takes precedence over environment variable."""
-        # Setup mocks
+        # Setup mocks - use IMPORTANT instead of CRITICAL to avoid exit(1)
         mock_get_review.return_value = (
-            ['[{"file": "test.py", "line": 1, "severity": "critical", "comment": "Bug"}]'],
+            ['[{"file": "test.py", "line": 1, "severity": "important", "comment": "Bug"}]'],
             "Summary",
         )
         mock_format.return_value = "Formatted review"
@@ -169,7 +169,7 @@ class TestReviewLevelCLI:
                 ],
             )
 
-            # Verify the command succeeded
+            # Verify the command succeeded (no critical issues)
             assert result.exit_code == 0, f"Command failed: {result.output}"
 
             # Verify format_review_comment was called with CRITICAL (CLI wins)

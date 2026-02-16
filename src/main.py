@@ -12,7 +12,6 @@
 import os
 import subprocess
 import sys
-import tempfile
 
 import click
 import google.generativeai as genai
@@ -48,7 +47,9 @@ def generate_diff_from_files(files: tuple) -> str:
                 all_diffs.append(result.stdout)
         except subprocess.CalledProcessError as e:
             logger.warning(f"Failed to get diff for {file_path}: {e}")
-    
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.warning(f"Unexpected error getting diff for {file_path}: {e}")
+
     return "\n".join(all_diffs)
 
 
@@ -68,23 +69,23 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
     BG_RED = "\033[101m"
     BG_YELLOW = "\033[103m"
     BG_BLUE = "\033[104m"
-    
+
     print("\n" + "=" * 80)
     print(f"{BOLD}{CYAN}🤖 Gemini AI Code Review{RESET}")
     print("=" * 80 + "\n")
-    
+
     if not filtered_items:
         print(f"{GREEN}{BOLD}✓ No issues found at {min_severity} level or above.{RESET}\n")
         if summarized_review:
             print(f"{BOLD}{CYAN}Summary:{RESET}")
             print(f"{DIM}{summarized_review}{RESET}")
         return
-    
+
     # Group by severity
     critical_items = [item for item in filtered_items if item.get("severity", "").lower() == "critical"]
     important_items = [item for item in filtered_items if item.get("severity", "").lower() == "important"]
     trivial_items = [item for item in filtered_items if item.get("severity", "").lower() == "trivial"]
-    
+
     # Print summary with counts
     total = len(filtered_items)
     print(f"{BOLD}Found {total} issue(s):{RESET}")
@@ -95,7 +96,7 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
     if trivial_items:
         print(f"  {BLUE}{BOLD}● {len(trivial_items)} TRIVIAL{RESET}")
     print()
-    
+
     # Print each item with enhanced formatting
     for i, item in enumerate(filtered_items, 1):
         severity = item.get("severity", "unknown").upper()
@@ -103,30 +104,27 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
         line_num = item.get("line", "?")
         comment = item.get("comment", "")
         suggestion = item.get("suggestion", "")
-        
+
         # Choose color and styling based on severity
         if severity == "CRITICAL":
-            color = RED
             bg_color = BG_RED
             icon = "🔴"
             label = "CRITICAL"
         elif severity == "IMPORTANT":
-            color = YELLOW
             bg_color = BG_YELLOW
             icon = "🟡"
             label = "IMPORTANT"
         else:
-            color = BLUE
             bg_color = BG_BLUE
             icon = "🔵"
             label = "TRIVIAL"
-        
+
         # Header with severity badge
         print(f"{icon} {BOLD}Issue #{i}{RESET} {bg_color}{BOLD} {label} {RESET}")
-        
+
         # File and line info with syntax highlighting
         print(f"   {CYAN}📄 {file_name}{RESET}{GRAY}:{line_num}{RESET}")
-        
+
         # Comment with word wrapping and indentation
         print(f"   {MAGENTA}💬 Comment:{RESET}")
         for comment_line in comment.split("\n"):
@@ -144,12 +142,12 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
                     print(current_line)
             else:
                 print(f"      {comment_line}")
-        
+
         # Code suggestion with syntax highlighting
         if suggestion:
             print(f"   {GREEN}💡 Suggested Fix:{RESET}")
-            print(f"   {GRAY}{'─' * 74}{RESET}")
-            
+            print(f"   {GRAY}{'─' * 74}{RESET}")  # pylint: disable=inconsistent-quotes
+
             # Colorize code lines (basic syntax highlighting)
             for line in suggestion.split("\n"):
                 if line.strip().startswith("-"):
@@ -167,11 +165,11 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
                 else:
                     # Regular code (dimmed)
                     print(f"   {DIM}{line}{RESET}")
-            
-            print(f"   {GRAY}{'─' * 74}{RESET}")
-        
+
+            print(f"   {GRAY}{'─' * 74}{RESET}")  # pylint: disable=inconsistent-quotes
+
         print()
-    
+
     # Overall summary with styling
     if summarized_review:
         print("=" * 80)
@@ -188,7 +186,7 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
     print()
 
 
-# pylint: disable=too-many-positional-arguments,too-many-locals
+# pylint: disable=too-many-positional-arguments,too-many-locals,broad-exception-caught
 @click.command()
 @click.option(
     "--diff-file",
@@ -249,11 +247,11 @@ def main(
 ):
     # Set log level
     logger.level(log_level)
-    
+
     # Set LOCAL environment variable if --local flag is set
     if local:
         os.environ["LOCAL"] = "1"
-    
+
     # Check if necessary environment variables are set or not
     check_required_env_vars()
 
@@ -287,7 +285,7 @@ def main(
         if not diff_file:
             logger.error("--diff-file is required when not in local mode")
             sys.exit(1)
-        
+
         print(diff_file)
         # List the content of the /tmp folder
         tmp_files = os.popen("ls -lah .").read()
@@ -356,17 +354,17 @@ def main(
     # if it is running in a local environment, print human-readable output and exit
     if os.getenv("LOCAL") is not None:
         print_local_review(filtered_items, summarized_review, min_severity)
-        
+
         # Exit with non-zero code if critical issues are found
         critical_items = [
-            item for item in filtered_items 
+            item for item in filtered_items
             if item.get("severity", "").lower() == "critical"
         ]
-        
+
         if critical_items:
             logger.error(f"Found {len(critical_items)} CRITICAL issue(s). Blocking commit.")
             sys.exit(1)
-        
+
         logger.info("Review complete. No critical issues found.")
         sys.exit(0)
 

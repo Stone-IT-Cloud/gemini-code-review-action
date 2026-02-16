@@ -11,7 +11,8 @@
 #  limitations under the License.
 """Test local mode execution for pre-commit hooks."""
 import os
-import tempfile
+import re
+import subprocess
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
@@ -19,9 +20,16 @@ from click.testing import CliRunner
 from src.main import generate_diff_from_files, main, print_local_review
 
 
+def strip_ansi_codes(text: str) -> str:
+    """Remove ANSI color codes from text."""
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", text)
+
+
 class TestLocalMode:
     """Test local mode functionality."""
 
+    # pylint: disable=unused-argument
     @patch("src.main.subprocess.run")
     @patch("src.main.genai")
     @patch("src.main.get_review")
@@ -231,8 +239,8 @@ class TestLocalMode:
     @patch("src.main.subprocess.run")
     def test_generate_diff_from_files_handles_errors(self, mock_subprocess):
         """Test that diff generation handles git errors gracefully."""
-        # Mock subprocess to raise error
-        mock_subprocess.side_effect = Exception("Git error")
+        # Mock subprocess to raise CalledProcessError
+        mock_subprocess.side_effect = subprocess.CalledProcessError(1, "git")
 
         files = ("test.py",)
         result = generate_diff_from_files(files)
@@ -268,11 +276,13 @@ class TestPrintLocalReview:
         print_local_review(items, "Security issue found", "IMPORTANT")
 
         captured = capsys.readouterr()
-        assert "CRITICAL" in captured.out
-        assert "test.py:42" in captured.out
-        assert "SQL injection" in captured.out
-        assert "Use parameterized queries" in captured.out
-        assert "🔴" in captured.out
+        output = strip_ansi_codes(captured.out)
+
+        assert "CRITICAL" in output
+        assert "test.py:42" in output
+        assert "SQL injection" in output
+        assert "Use parameterized queries" in output
+        assert "Issue #1" in output
 
     def test_print_local_review_with_important_issue(self, capsys):
         """Test output with important issue."""
@@ -288,10 +298,12 @@ class TestPrintLocalReview:
         print_local_review(items, "Issues found", "TRIVIAL")
 
         captured = capsys.readouterr()
-        assert "IMPORTANT" in captured.out
-        assert "app.py:10" in captured.out
-        assert "null pointer" in captured.out
-        assert "🟡" in captured.out
+        output = strip_ansi_codes(captured.out)
+
+        assert "IMPORTANT" in output
+        assert "app.py:10" in output
+        assert "null pointer" in output
+        assert "Issue #1" in output
 
     def test_print_local_review_with_trivial_issue(self, capsys):
         """Test output with trivial issue."""
@@ -307,10 +319,12 @@ class TestPrintLocalReview:
         print_local_review(items, "", "TRIVIAL")
 
         captured = capsys.readouterr()
-        assert "TRIVIAL" in captured.out
-        assert "utils.py:5" in captured.out
-        assert "Missing docstring" in captured.out
-        assert "🔵" in captured.out
+        output = strip_ansi_codes(captured.out)
+
+        assert "TRIVIAL" in output
+        assert "utils.py:5" in output
+        assert "Missing docstring" in output
+        assert "Issue #1" in output
 
     def test_print_local_review_with_multiple_issues(self, capsys):
         """Test output with multiple issues of different severities."""

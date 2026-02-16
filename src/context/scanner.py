@@ -16,24 +16,13 @@ from typing import Any, Dict, Optional
 
 from loguru import logger
 
-from src.context.parsers import (
-    DockerComposeParser,
-    DockerParser,
-    DotNetParser,
-    GolangParser,
-    GradleParser,
-    HelmParser,
-    JavaScriptParser,
-    KubernetesParser,
-    MavenParser,
-    PHPParser,
-    PythonPipfileParser,
-    PythonPyprojectParser,
-    PythonRequirementsParser,
-    RubyParser,
-    RustParser,
-    TerraformParser,
-)
+from src.context.parsers import (DockerComposeParser, DockerParser,
+                                 DotNetParser, GolangParser, GradleParser,
+                                 HelmParser, JavaScriptParser,
+                                 KubernetesParser, MavenParser, PHPParser,
+                                 PythonPipfileParser, PythonPyprojectParser,
+                                 PythonRequirementsParser, RubyParser,
+                                 RustParser, TerraformParser)
 
 # Token budget constraints
 MAX_BYTES_PER_FILE = 2048  # 2KB

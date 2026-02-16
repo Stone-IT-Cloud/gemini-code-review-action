@@ -241,10 +241,10 @@ Found 2 issue(s):
   🔴 1 CRITICAL (blocking)
   🟡 1 IMPORTANT
 
-🔴 Issue #1  CRITICAL 
+🔴 Issue #1  CRITICAL
    📄 src/auth.py:45
    💬 Comment:
-      SQL injection vulnerability detected. User input is directly 
+      SQL injection vulnerability detected. User input is directly
       concatenated into SQL query without sanitization.
    💡 Suggested Fix:
    ──────────────────────────────────────────────────────────────────────────

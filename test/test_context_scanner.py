@@ -17,7 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from src.context.scanner import ContextScanner, MAX_BYTES_PER_FILE, MAX_LINES_PER_FILE
+from src.context.scanner import (MAX_BYTES_PER_FILE, MAX_LINES_PER_FILE,
+                                 ContextScanner)
 
 
 class TestContextScannerFileReading:

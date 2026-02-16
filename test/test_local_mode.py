@@ -88,7 +88,10 @@ class TestLocalMode:
 
         # Mock review to return critical issue
         mock_get_review.return_value = (
-            ['[{"file": "test.py", "line": 1, "severity": "critical", "comment": "Security issue"}]'],
+            [
+                '[{"file": "test.py", "line": 1, '
+                '"severity": "critical", "comment": "Security issue"}]'
+            ],
             "Critical security vulnerability found",
         )
 
@@ -190,7 +193,7 @@ class TestLocalMode:
 
         # Mock review to return no issues
         mock_get_review.return_value = (
-            ['[]'],
+            ["[]"],
             "No issues found",
         )
 

@@ -20,12 +20,9 @@ from loguru import logger
 
 from src.config import AiReviewConfig, check_required_env_vars
 from src.gemini_client import get_review
-from src.github_client import (
-    create_a_comment_to_pull_request,
-    create_inline_review_comments,
-    get_all_pr_comments_text,
-    write_github_output,
-)
+from src.github_client import (create_a_comment_to_pull_request,
+                               create_inline_review_comments,
+                               get_all_pr_comments_text, write_github_output)
 from src.prompts import get_review_prompt
 from src.review_formatter import filter_by_severity, format_review_comment
 from src.review_parser import parse_review_response
@@ -82,9 +79,18 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
         return
 
     # Group by severity
-    critical_items = [item for item in filtered_items if item.get("severity", "").lower() == "critical"]
-    important_items = [item for item in filtered_items if item.get("severity", "").lower() == "important"]
-    trivial_items = [item for item in filtered_items if item.get("severity", "").lower() == "trivial"]
+    critical_items = [
+        item for item in filtered_items
+        if item.get("severity", "").lower() == "critical"
+    ]
+    important_items = [
+        item for item in filtered_items
+        if item.get("severity", "").lower() == "important"
+    ]
+    trivial_items = [
+        item for item in filtered_items
+        if item.get("severity", "").lower() == "trivial"
+    ]
 
     # Print summary with counts
     total = len(filtered_items)

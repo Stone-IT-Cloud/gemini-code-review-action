@@ -10,22 +10,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-FROM python:3.12-slim
-
-WORKDIR /app
-
-# Install git (required for local mode to generate diffs)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends git && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install python packages
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the application source
-COPY src/ ./src/
-
-# Support both CI and local modes by allowing arguments to be passed
-ENTRYPOINT ["python", "-m", "src.main"]
+- id: gemini-code-review
+  name: Gemini AI Code Review
+  description: Use Gemini AI to review staged files before commit.
+  language: docker_image
+  entry: --local
+  types: [text]
+  pass_filenames: true
+  # Requires the user to set GEMINI_API_KEY in their local shell

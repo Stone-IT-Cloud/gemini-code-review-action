@@ -190,6 +190,85 @@ Gemini quotas are shared across your project/account. If multiple workflows run 
 ## Local testing
 Set the `LOCAL` environment variable to any value to prevent posting comments and log the review output instead.
 
+### Running as a Pre-Commit Hook (Recommended)
+
+You can use this action as a [pre-commit](https://pre-commit.com/) hook to get AI-powered code reviews **before** you commit. This enables "Shift Left" development practices by catching issues early in your development workflow.
+
+**Prerequisites:**
+- Install pre-commit: `pip install pre-commit`
+- Set your Gemini API key in your shell environment
+
+**1. Add to your `.pre-commit-config.yaml`:**
+
+```yaml
+repos:
+  - repo: https://github.com/Stone-IT-Cloud/gemini-code-review-action
+    rev: v1.1.4  # Use the latest release tag
+    hooks:
+      - id: gemini-code-review
+        # Optional: customize the review level
+        # args: ['--review-level=CRITICAL']
+```
+
+**2. Set your API key:**
+
+```bash
+export GEMINI_API_KEY="your-gemini-api-key"
+```
+
+**3. Install the hook:**
+
+```bash
+pre-commit install
+```
+
+**4. Use it:**
+
+Now when you run `git commit`, the hook will automatically:
+- Analyze your staged changes using Gemini AI
+- Display findings in a colorized, human-readable format
+- Block the commit if **CRITICAL** issues are found
+- Allow the commit if only IMPORTANT or TRIVIAL issues are found
+
+**Example output:**
+
+```
+================================================================================
+🤖 Gemini AI Code Review
+================================================================================
+
+Found 2 issue(s):
+  🔴 1 CRITICAL (blocking)
+  🟡 1 IMPORTANT
+
+🔴 Issue #1  CRITICAL
+   📄 src/auth.py:45
+   💬 Comment:
+      SQL injection vulnerability detected. User input is directly
+      concatenated into SQL query without sanitization.
+   💡 Suggested Fix:
+   ──────────────────────────────────────────────────────────────────────────
+   -  query = f"SELECT * FROM users WHERE id = {user_id}"
+   +  query = "SELECT * FROM users WHERE id = ?"
+   +  cursor.execute(query, (user_id,))
+   ──────────────────────────────────────────────────────────────────────────
+```
+
+**Customizing the Review Level:**
+
+By default, only CRITICAL issues block commits. You can customize this in your `.pre-commit-config.yaml`:
+
+```yaml
+- id: gemini-code-review
+  args: ['--review-level=IMPORTANT']  # Show IMPORTANT and CRITICAL (only CRITICAL blocks)
+```
+
+**Bypassing the hook (when needed):**
+
+```bash
+git commit --no-verify  # Skip all pre-commit hooks
+```
+
 ### Running locally without Docker
 
 You can run the review tool directly from your machine using Python. This is useful for testing diffs before pushing to GitHub.
@@ -241,8 +320,6 @@ You can also set the review level via environment variable:
 export REVIEW_LEVEL=CRITICAL
 bash test/run-local.sh /tmp/my-changes.diff
 ```
-
-> **Future:** This local workflow is designed to also work as a [pre-commit](https://pre-commit.com/) hook, enabling automated AI code review before every commit.
 
 ## Project structure
 

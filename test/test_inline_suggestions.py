@@ -12,12 +12,8 @@
 import json
 
 from src.review_formatter import format_review_comment
-from src.review_parser import (
-    REVIEW_SYSTEM_PROMPT,
-    _validate_review_item,
-    parse_review_response,
-)
-
+from src.review_parser import (REVIEW_SYSTEM_PROMPT, _validate_review_item,
+                               parse_review_response)
 
 # ---------------------------------------------------------------------------
 # _validate_review_item - suggestion field validation

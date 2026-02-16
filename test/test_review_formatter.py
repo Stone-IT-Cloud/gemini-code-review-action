@@ -88,18 +88,18 @@ class TestFilterBySeverity:
             {"file": "c.py", "line": 3, "severity": "trivial", "comment": "Style"},
             {"file": "d.py", "line": 4, "severity": "critical", "comment": "Bug"},
         ]
-        
+
         # With threshold=critical, only critical and unknown (treated as important) should not pass
         result = filter_by_severity(items, "critical")
         assert len(result) == 1  # Only critical item
         assert result[0]["file"] == "d.py"
-        
+
         # With threshold=important, critical and unknown (defaulting to important) pass
         result = filter_by_severity(items, "important")
         assert len(result) == 3  # critical + 2 unknown items (treated as important)
         file_names = {item["file"] for item in result}
         assert file_names == {"a.py", "b.py", "d.py"}
-        
+
         # With threshold=trivial, all items pass
         result = filter_by_severity(items, "trivial")
         assert len(result) == 4

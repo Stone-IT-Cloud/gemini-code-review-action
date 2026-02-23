@@ -16,7 +16,7 @@ WORKDIR /app
 
 # Install git (required for local mode to generate diffs)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git && \
+    apt-get install -y --no-install-recommends git=1:2.39.2-1.1 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -26,6 +26,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application source
 COPY src/ ./src/
+
+# Ensure Python finds the action's src package when container runs with -w GITHUB_WORKSPACE
+ENV PYTHONPATH=/app
 
 # Support both CI and local modes by allowing arguments to be passed
 ENTRYPOINT ["python", "-m", "src.main"]

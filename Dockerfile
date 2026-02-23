@@ -14,9 +14,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install git (required for local mode to generate diffs)
+# Install git (required for local mode to generate diffs). Not pinned so image builds on both Bookworm and Trixie base images.
+# hadolint ignore=DL3008
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git=1:2.39.2-1.1 && \
+    apt-get install -y --no-install-recommends git && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

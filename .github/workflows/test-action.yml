@@ -11,7 +11,7 @@ jobs:
       pull-requests: write
     env:
       PR_DIFF_PATH: /tmp/sarasa.diff
-      GEMINI_MODEL: "gemini-1.5-pro"
+      GEMINI_MODEL: "gemini-2.5-flash"
       LOCAL: "True"
 
     steps:

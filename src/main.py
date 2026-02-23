@@ -12,6 +12,7 @@
 import os
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import click
 import google.generativeai as genai
@@ -69,17 +70,18 @@ def generate_diff_from_files(files: tuple) -> str:
 
 def print_local_review(filtered_items: list, summarized_review: str, min_severity: str):
     """Print review results in human-readable format for local mode."""
-    a = _ANSI
+    # Namespace of ANSI codes (attribute access in f-strings avoids nested quotes; Py<3.12 safe)
+    c = SimpleNamespace(**{k.lower(): v for k, v in _ANSI.items()})
     dash_line = "─" * 74
     print("\n" + "=" * 80)
-    print(f"{a["BOLD"]}{a["CYAN"]}🤖 Gemini AI Code Review{a["RESET"]}")
+    print(f"{c.bold}{c.cyan}🤖 Gemini AI Code Review{c.reset}")
     print("=" * 80 + "\n")
 
     if not filtered_items:
-        print(f"{a["GREEN"]}{a["BOLD"]}✓ No issues found at {min_severity} level or above.{a["RESET"]}\n")
+        print(f"{c.green}{c.bold}✓ No issues found at {min_severity} level or above.{c.reset}\n")
         if summarized_review:
-            print(f"{a["BOLD"]}{a["CYAN"]}Summary:{a["RESET"]}")
-            print(f"{a["DIM"]}{summarized_review}{a["RESET"]}")
+            print(f"{c.bold}{c.cyan}Summary:{c.reset}")
+            print(f"{c.dim}{summarized_review}{c.reset}")
         return
 
     # Group by severity
@@ -98,13 +100,13 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
 
     # Print summary with counts
     total = len(filtered_items)
-    print(f"{a["BOLD"]}Found {total} issue(s):{a["RESET"]}")
+    print(f"{c.bold}Found {total} issue(s):{c.reset}")
     if critical_items:
-        print(f"  {a["RED"]}{a["BOLD"]}● {len(critical_items)} CRITICAL{a["RESET"]} {a["GRAY"]}(blocking){a["RESET"]}")
+        print(f"  {c.red}{c.bold}● {len(critical_items)} CRITICAL{c.reset} {c.gray}(blocking){c.reset}")
     if important_items:
-        print(f"  {a["YELLOW"]}{a["BOLD"]}● {len(important_items)} IMPORTANT{a["RESET"]}")
+        print(f"  {c.yellow}{c.bold}● {len(important_items)} IMPORTANT{c.reset}")
     if trivial_items:
-        print(f"  {a["BLUE"]}{a["BOLD"]}● {len(trivial_items)} TRIVIAL{a["RESET"]}")
+        print(f"  {c.blue}{c.bold}● {len(trivial_items)} TRIVIAL{c.reset}")
     print()
 
     # Print each item with enhanced formatting
@@ -117,26 +119,26 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
 
         # Choose color and styling based on severity
         if severity == "CRITICAL":
-            bg_color = a["BG_RED"]
+            bg_color = c.bg_red
             icon = "🔴"
             label = "CRITICAL"
         elif severity == "IMPORTANT":
-            bg_color = a["BG_YELLOW"]
+            bg_color = c.bg_yellow
             icon = "🟡"
             label = "IMPORTANT"
         else:
-            bg_color = a["BG_BLUE"]
+            bg_color = c.bg_blue
             icon = "🔵"
             label = "TRIVIAL"
 
         # Header with severity badge
-        print(f"{icon} {a["BOLD"]}Issue #{i}{a["RESET"]} {bg_color}{a["BOLD"]} {label} {a["RESET"]}")
+        print(f"{icon} {c.bold}Issue #{i}{c.reset} {bg_color}{c.bold} {label} {c.reset}")
 
         # File and line info with syntax highlighting
-        print(f"   {a["CYAN"]}📄 {file_name}{a["RESET"]}{a["GRAY"]}:{line_num}{a["RESET"]}")
+        print(f"   {c.cyan}📄 {file_name}{c.reset}{c.gray}:{line_num}{c.reset}")
 
         # Comment with word wrapping and indentation
-        print(f"   {a["MAGENTA"]}💬 Comment:{a["RESET"]}")
+        print(f"   {c.magenta}💬 Comment:{c.reset}")
         for comment_line in comment.split("\n"):
             # Wrap long lines
             if len(comment_line) > 70:
@@ -155,31 +157,31 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
 
         # Code suggestion with syntax highlighting
         if suggestion:
-            print(f"   {a["GREEN"]}💡 Suggested Fix:{a["RESET"]}")
-            print(f"   {a["GRAY"]}{dash_line}{a["RESET"]}")
+            print(f"   {c.green}💡 Suggested Fix:{c.reset}")
+            print(f"   {c.gray}{dash_line}{c.reset}")
 
             # Colorize code lines (basic syntax highlighting)
             for line in suggestion.split("\n"):
                 if line.strip().startswith("-"):
-                    print(f"   {a["RED"]}{line}{a["RESET"]}")
+                    print(f"   {c.red}{line}{c.reset}")
                 elif line.strip().startswith("+"):
-                    print(f"   {a["GREEN"]}{line}{a["RESET"]}")
+                    print(f"   {c.green}{line}{c.reset}")
                 elif line.strip().startswith("@@"):
-                    print(f"   {a["CYAN"]}{line}{a["RESET"]}")
+                    print(f"   {c.cyan}{line}{c.reset}")
                 elif any(kw in line for kw in ["def ", "class ", "import ", "from "]):
-                    print(f"   {a["MAGENTA"]}{line}{a["RESET"]}")
+                    print(f"   {c.magenta}{line}{c.reset}")
                 else:
-                    print(f"   {a["DIM"]}{line}{a["RESET"]}")
+                    print(f"   {c.dim}{line}{c.reset}")
 
-            print(f"   {a["GRAY"]}{dash_line}{a["RESET"]}")
+            print(f"   {c.gray}{dash_line}{c.reset}")
 
         print()
 
     # Overall summary with styling
     if summarized_review:
         print("=" * 80)
-        print(f"{a["BOLD"]}{a["CYAN"]}📋 Overall Summary:{a["RESET"]}")
-        print(f"{a["DIM"]}{summarized_review}{a["RESET"]}")
+        print(f"{c.bold}{c.cyan}📋 Overall Summary:{c.reset}")
+        print(f"{c.dim}{summarized_review}{c.reset}")
         print("=" * 80)
     print()
 
@@ -201,7 +203,11 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
     help="Pull request diff",
 )
 @click.option(
-    "--model", type=click.STRING, required=False, default="gpt-3.5-turbo", help="Model"
+    "--model",
+    type=click.STRING,
+    required=False,
+    default="gemini-2.5-flash",
+    help="Gemini model name (e.g. gemini-2.5-flash, gemini-2.5-pro)",
 )
 @click.option(
     "--extra-prompt", type=click.STRING, required=False, default="", help="Extra prompt"

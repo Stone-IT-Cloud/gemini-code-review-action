@@ -17,7 +17,7 @@ If the diff exceeds the model's context window, the Action splits it into chunks
 - `github_repository` (required): Target repository (defaults to `${{ github.repository }}`).
 - `github_pull_request_number` (required): PR number (defaults to `${{ github.event.pull_request.number }}`).
 - `git_commit_hash` (required): PR head SHA (defaults to `${{ github.event.pull_request.head.sha }}`).
-- `model` (required): Gemini model name (e.g., `gemini-1.5-pro-latest`).
+- `model` (required): Gemini model name (e.g., `gemini-2.5-flash`, `gemini-2.5-pro`).
 - `extra_prompt` (optional): Additional system guidance to steer the review.
 - `temperature` (optional): Sampling temperature.
 - `top_p` (optional): Nucleus sampling.

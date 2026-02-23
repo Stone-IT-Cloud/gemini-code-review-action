@@ -94,7 +94,7 @@ class TestCreateSuggestionFence:
         result = create_suggestion_fence(suggestion)
         assert "    indented_code = True" in result
         # Verify indentation is preserved
-        lines = result.split('\n')
+        lines = result.split("\n")
         assert lines[2] == "    indented_code = True"
 
     def test_suggestion_with_mixed_indentation(self):

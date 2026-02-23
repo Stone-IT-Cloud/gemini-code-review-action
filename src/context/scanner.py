@@ -28,6 +28,9 @@ from src.context.parsers import (DockerComposeParser, DockerParser,
 MAX_BYTES_PER_FILE = 2048  # 2KB
 MAX_LINES_PER_FILE = 50
 
+# Exceptions that parsers may raise (used to avoid broad Exception)
+PARSER_EXCEPTIONS = (ValueError, KeyError, TypeError, AttributeError, IndexError, OSError)
+
 
 class ContextScanner:
     """Scanner for detecting and parsing project configuration files."""
@@ -41,7 +44,7 @@ class ContextScanner:
         self.repo_root = Path(repo_root)
         self.context: Dict[str, Any] = {}
 
-    def _read_file_limited(self, filepath: Path) -> Optional[str]:
+    def read_file_limited(self, filepath: Path) -> Optional[str]:
         """Read file content with token budget limits.
 
         Limits content to 2KB or 50 lines, whichever comes first.
@@ -58,16 +61,16 @@ class ContextScanner:
                 return None
 
             # Read with byte limit (read in binary mode then decode)
-            with open(filepath, 'rb') as file:
+            with open(filepath, "rb") as file:
                 raw_bytes = file.read(MAX_BYTES_PER_FILE)
 
             # Decode with best-effort error handling
-            content = raw_bytes.decode('utf-8', errors='ignore')
+            content = raw_bytes.decode("utf-8", errors="ignore")
 
             # Apply line limit
-            lines = content.split('\n')
+            lines = content.split("\n")
             if len(lines) > MAX_LINES_PER_FILE:
-                content = '\n'.join(lines[:MAX_LINES_PER_FILE])
+                content = "\n".join(lines[:MAX_LINES_PER_FILE])
 
             return content
         except (OSError, UnicodeDecodeError) as exc:
@@ -78,98 +81,98 @@ class ContextScanner:
         """Scan for Python configuration files."""
         # requirements.txt
         req_path = self.repo_root / "requirements.txt"
-        content = self._read_file_limited(req_path)
+        content = self.read_file_limited(req_path)
         if content is not None:
             try:
                 parser = PythonRequirementsParser()
                 self.context["python_requirements"] = parser.parse(content)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse requirements.txt: {exc}")
 
         # Pipfile
         pipfile_path = self.repo_root / "Pipfile"
-        content = self._read_file_limited(pipfile_path)
+        content = self.read_file_limited(pipfile_path)
         if content is not None:
             try:
                 parser = PythonPipfileParser()
                 self.context["python_pipfile"] = parser.parse(content)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse Pipfile: {exc}")
 
         # pyproject.toml
         pyproject_path = self.repo_root / "pyproject.toml"
-        content = self._read_file_limited(pyproject_path)
+        content = self.read_file_limited(pyproject_path)
         if content is not None:
             try:
                 parser = PythonPyprojectParser()
                 self.context["python_pyproject"] = parser.parse(content)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse pyproject.toml: {exc}")
 
     def _scan_php(self) -> None:
         """Scan for PHP configuration files."""
         composer_path = self.repo_root / "composer.json"
-        content = self._read_file_limited(composer_path)
+        content = self.read_file_limited(composer_path)
         if content is not None:
             try:
                 parser = PHPParser()
                 self.context["php_composer"] = parser.parse(content)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse composer.json: {exc}")
 
     def _scan_javascript(self) -> None:
         """Scan for JavaScript/TypeScript configuration files."""
         package_path = self.repo_root / "package.json"
-        content = self._read_file_limited(package_path)
+        content = self.read_file_limited(package_path)
         if content is not None:
             try:
                 parser = JavaScriptParser()
                 self.context["javascript_package"] = parser.parse(content)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse package.json: {exc}")
 
     def _scan_golang(self) -> None:
         """Scan for Golang configuration files."""
         gomod_path = self.repo_root / "go.mod"
-        content = self._read_file_limited(gomod_path)
+        content = self.read_file_limited(gomod_path)
         if content is not None:
             try:
                 parser = GolangParser()
                 self.context["golang_mod"] = parser.parse(content)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse go.mod: {exc}")
 
     def _scan_ruby(self) -> None:
         """Scan for Ruby configuration files."""
         gemfile_path = self.repo_root / "Gemfile"
-        content = self._read_file_limited(gemfile_path)
+        content = self.read_file_limited(gemfile_path)
         if content is not None:
             try:
                 parser = RubyParser()
                 self.context["ruby_gemfile"] = parser.parse(content)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse Gemfile: {exc}")
 
     def _scan_java(self) -> None:
         """Scan for Java configuration files."""
         # Maven pom.xml
         pom_path = self.repo_root / "pom.xml"
-        content = self._read_file_limited(pom_path)
+        content = self.read_file_limited(pom_path)
         if content is not None:
             try:
                 parser = MavenParser()
                 self.context["java_pom"] = parser.parse(content)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse pom.xml: {exc}")
 
         # Gradle build.gradle
         gradle_path = self.repo_root / "build.gradle"
-        content = self._read_file_limited(gradle_path)
+        content = self.read_file_limited(gradle_path)
         if content is not None:
             try:
                 parser = GradleParser()
                 self.context["java_gradle"] = parser.parse(content)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse build.gradle: {exc}")
 
     def _scan_dotnet(self) -> None:
@@ -177,37 +180,37 @@ class ContextScanner:
         # Look for .csproj, .fsproj, .vbproj files
         for pattern in ["*.csproj", "*.fsproj", "*.vbproj"]:
             for proj_file in self.repo_root.glob(pattern):
-                content = self._read_file_limited(proj_file)
+                content = self.read_file_limited(proj_file)
                 if content is not None:
                     try:
                         parser = DotNetParser()
                         key = f"dotnet_{proj_file.stem}"
                         self.context[key] = parser.parse(content)
                         return  # Exit function after parsing first project file
-                    except Exception as exc:
+                    except PARSER_EXCEPTIONS as exc:
                         logger.debug(f"Failed to parse {proj_file}: {exc}")
 
     def _scan_rust(self) -> None:
         """Scan for Rust configuration files."""
         cargo_path = self.repo_root / "Cargo.toml"
-        content = self._read_file_limited(cargo_path)
+        content = self.read_file_limited(cargo_path)
         if content is not None:
             try:
                 parser = RustParser()
                 self.context["rust_cargo"] = parser.parse(content)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse Cargo.toml: {exc}")
 
     def _scan_docker(self) -> None:
         """Scan for Docker configuration files."""
         # Dockerfile
         dockerfile_path = self.repo_root / "Dockerfile"
-        content = self._read_file_limited(dockerfile_path)
+        content = self.read_file_limited(dockerfile_path)
         if content is not None:
             try:
                 parser = DockerParser()
                 self.context["docker_dockerfile"] = parser.parse(content)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse Dockerfile: {exc}")
 
         # docker-compose files (v1 and v2 naming conventions)
@@ -219,13 +222,13 @@ class ContextScanner:
         ]
         for compose_name in compose_files:
             compose_path = self.repo_root / compose_name
-            content = self._read_file_limited(compose_path)
+            content = self.read_file_limited(compose_path)
             if content is not None:
                 try:
                     parser = DockerComposeParser()
                     self.context["docker_compose"] = parser.parse(content)
                     break
-                except Exception as exc:
+                except PARSER_EXCEPTIONS as exc:
                     logger.debug(f"Failed to parse {compose_name}: {exc}")
 
     def _scan_kubernetes(self) -> None:
@@ -249,7 +252,7 @@ class ContextScanner:
             if files_scanned > max_files_scanned or len(k8s_resources) >= max_resources:
                 break
 
-            content = self._read_file_limited(path)
+            content = self.read_file_limited(path)
             if content is None:
                 continue
 
@@ -260,7 +263,7 @@ class ContextScanner:
                 if kind in target_kinds:
                     parsed["filename"] = path.name
                     k8s_resources.append(parsed)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse {path}: {exc}")
 
         if k8s_resources:
@@ -273,17 +276,17 @@ class ContextScanner:
         """Scan for Helm chart files."""
         # Look for Chart.yaml
         chart_path = self.repo_root / "Chart.yaml"
-        content = self._read_file_limited(chart_path)
+        content = self.read_file_limited(chart_path)
         if content is not None:
             try:
                 parser = HelmParser()
                 self.context["helm_chart"] = parser.parse(content)
-            except Exception as exc:
+            except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse Chart.yaml: {exc}")
 
         # Look for values.yaml and extract first 50 lines for global config
         values_path = self.repo_root / "values.yaml"
-        content = self._read_file_limited(values_path)
+        content = self.read_file_limited(values_path)
         if content is not None:
             # Store first 50 lines as they often contain global config
             lines = content.split("\n")[:50]  # First 50 lines as preview
@@ -304,13 +307,13 @@ class ContextScanner:
             if selected_tf is None:
                 selected_tf = tf_files[0]
 
-            content = self._read_file_limited(selected_tf)
+            content = self.read_file_limited(selected_tf)
             if content is not None:
                 try:
                     parser = TerraformParser()
                     self.context["terraform"] = parser.parse(content)
                     self.context["terraform"]["files_found"] = [f.name for f in tf_files[:10]]
-                except Exception as exc:
+                except PARSER_EXCEPTIONS as exc:
                     logger.debug(f"Failed to parse {selected_tf}: {exc}")
 
     def _scan_documentation(self) -> None:
@@ -321,7 +324,7 @@ class ContextScanner:
         doc_files = ["README.md", "CONTRIBUTING.md", "ARCHITECTURE.md", "SECURITY.md"]
         for doc_file in doc_files:
             doc_path = self.repo_root / doc_file
-            content = self._read_file_limited(doc_path)
+            content = self.read_file_limited(doc_path)
             if content:
                 # Extract first ~2000 chars for better context
                 if len(content) > 2000:
@@ -333,7 +336,7 @@ class ContextScanner:
         if docs_dir.exists() and docs_dir.is_dir():
             md_files = list(docs_dir.glob("*.md"))[:2]  # Limit to first 2 files
             for doc_file in md_files:
-                content = self._read_file_limited(doc_file)
+                content = self.read_file_limited(doc_file)
                 if content:
                     # Extract first ~2000 chars for better context
                     if len(content) > 2000:
@@ -408,7 +411,8 @@ class ContextScanner:
             detected_techs.append("Rust")
 
         if detected_techs:
-            lines.append(f"**Technologies:** {', '.join(detected_techs)}")
+            tech_list = ", ".join(detected_techs)
+            lines.append(f"**Technologies:** {tech_list}")
 
         # Infrastructure
         infra_techs = []
@@ -422,22 +426,26 @@ class ContextScanner:
             infra_techs.append("Terraform")
 
         if infra_techs:
-            lines.append(f"**Infrastructure:** {', '.join(infra_techs)}")
+            infra_list = ", ".join(infra_techs)
+            lines.append(f"**Infrastructure:** {infra_list}")
 
         # Framework-specific details
         if "php_composer" in self.context:
             composer = self.context["php_composer"]
             if "framework" in composer:
-                lines.append(f"**PHP Framework:** {composer['framework']}")
+                fw = composer["framework"]
+                lines.append(f"**PHP Framework:** {fw}")
 
         if "ruby_gemfile" in self.context:
             gemfile = self.context["ruby_gemfile"]
             if "rails_version" in gemfile:
-                lines.append(f"**Rails Version:** {gemfile['rails_version']}")
+                rv = gemfile["rails_version"]
+                lines.append(f"**Rails Version:** {rv}")
 
         if "golang_mod" in self.context:
             gomod = self.context["golang_mod"]
             if "go_version" in gomod:
-                lines.append(f"**Go Version:** {gomod['go_version']}")
+                gv = gomod["go_version"]
+                lines.append(f"**Go Version:** {gv}")
 
         return "\n".join(lines)

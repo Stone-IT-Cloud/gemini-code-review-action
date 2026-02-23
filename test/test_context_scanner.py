@@ -31,7 +31,7 @@ class TestContextScannerFileReading:
             test_file.write_text("line1\nline2\nline3")
 
             scanner = ContextScanner(tmpdir)
-            content = scanner._read_file_limited(test_file)
+            content = scanner.read_file_limited(test_file)
 
             assert content == "line1\nline2\nline3"
 
@@ -44,11 +44,11 @@ class TestContextScannerFileReading:
             test_file.write_text("\n".join(lines))
 
             scanner = ContextScanner(tmpdir)
-            content = scanner._read_file_limited(test_file)
+            content = scanner.read_file_limited(test_file)
 
             # Should only have MAX_LINES_PER_FILE lines
             assert content is not None
-            assert content.count('\n') == MAX_LINES_PER_FILE - 1
+            assert content.count("\n") == MAX_LINES_PER_FILE - 1
 
     def test_read_file_exceeds_byte_limit(self):
         """Test reading a file that exceeds the byte limit."""
@@ -59,7 +59,7 @@ class TestContextScannerFileReading:
             test_file.write_text(large_content)
 
             scanner = ContextScanner(tmpdir)
-            content = scanner._read_file_limited(test_file)
+            content = scanner.read_file_limited(test_file)
 
             # Should be limited to MAX_BYTES_PER_FILE
             assert content is not None
@@ -69,7 +69,7 @@ class TestContextScannerFileReading:
         """Test reading a file that doesn't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
             scanner = ContextScanner(tmpdir)
-            content = scanner._read_file_limited(Path(tmpdir) / "nonexistent.txt")
+            content = scanner.read_file_limited(Path(tmpdir) / "nonexistent.txt")
 
             assert content is None
 
@@ -77,7 +77,7 @@ class TestContextScannerFileReading:
         """Test attempting to read a directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             scanner = ContextScanner(tmpdir)
-            content = scanner._read_file_limited(Path(tmpdir))
+            content = scanner.read_file_limited(Path(tmpdir))
 
             assert content is None
 
@@ -798,7 +798,7 @@ class TestEdgeCases:
         """Test handling of binary files (should be ignored)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             binary_file = Path(tmpdir) / "package.json"
-            binary_file.write_bytes(b'\x00\x01\x02\x03')
+            binary_file.write_bytes(b"\x00\x01\x02\x03")
 
             scanner = ContextScanner(tmpdir)
             # Should not crash

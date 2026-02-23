@@ -27,7 +27,7 @@ class TestReviewLevelCLI:
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
     def test_review_level_from_cli_parameter(
-        self, mock_check_env, mock_format, mock_get_review, mock_genai
+        self, _mock_check_env, mock_format, mock_get_review, _mock_genai
     ):
         """Test that --review-level CLI parameter is used."""
         # Setup mocks - use IMPORTANT instead of CRITICAL to avoid exit(1)
@@ -81,7 +81,7 @@ class TestReviewLevelCLI:
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
     def test_review_level_defaults_to_env_var(
-        self, mock_check_env, mock_format, mock_get_review, mock_genai
+        self, _mock_check_env, mock_format, mock_get_review, _mock_genai
     ):
         """Test that environment variable is used when CLI param not provided."""
         # Setup mocks
@@ -134,7 +134,7 @@ class TestReviewLevelCLI:
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
     def test_review_level_cli_overrides_env(
-        self, mock_check_env, mock_format, mock_get_review, mock_genai
+        self, _mock_check_env, mock_format, mock_get_review, _mock_genai
     ):
         """Test that CLI parameter takes precedence over environment variable."""
         # Setup mocks - use IMPORTANT instead of CRITICAL to avoid exit(1)
@@ -190,7 +190,7 @@ class TestReviewLevelCLI:
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
     def test_review_level_defaults_to_important(
-        self, mock_check_env, mock_format, mock_get_review, mock_genai
+        self, _mock_check_env, mock_format, mock_get_review, _mock_genai
     ):
         """Test that default is IMPORTANT when neither CLI nor env is set."""
         # Setup mocks

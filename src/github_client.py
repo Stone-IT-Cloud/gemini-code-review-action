@@ -74,8 +74,9 @@ def create_inline_review_comments(
     for item in review_items:
         # Skip file-level comments (line 0) as they require different handling
         if item.get("line", 0) == 0:
+            fpath = item.get("file")
             logger.info(
-                f"Skipping file-level comment for {item.get('file')} "
+                f"Skipping file-level comment for {fpath} "
                 "(line 0 not supported for inline comments)"
             )
             results.append({
@@ -110,10 +111,8 @@ def create_inline_review_comments(
                 url, headers=headers, data=json.dumps(data), timeout=30
             )
             if response.status_code == 201:
-                logger.info(
-                    f"Posted inline comment to {item.get('file')}:"
-                    f"{item.get('line')}"
-                )
+                fpath, line_no = item.get("file"), item.get("line")
+                logger.info(f"Posted inline comment to {fpath}:{line_no}")
                 results.append({
                     "file": item.get("file"),
                     "line": item.get("line"),
@@ -121,10 +120,10 @@ def create_inline_review_comments(
                     "status_code": 201
                 })
             else:
+                fpath, line_no = item.get("file"), item.get("line")
                 logger.error(
-                    f"Failed to post inline comment to {item.get('file')}:"
-                    f"{item.get('line')} - HTTP {response.status_code}: "
-                    f"{response.text}"
+                    f"Failed to post inline comment to {fpath}:{line_no} - "
+                    f"HTTP {response.status_code}: {response.text}"
                 )
                 results.append({
                     "file": item.get("file"),
@@ -133,13 +132,11 @@ def create_inline_review_comments(
                     "status_code": response.status_code,
                     "error": response.text
                 })
-        except Exception as exc:
-            # Catch all exceptions to ensure we never fail the entire review
+        except (requests.RequestException, OSError) as exc:
+            # Catch network/HTTP errors so we never fail the entire review
             # due to issues posting a single comment
-            logger.error(
-                f"Exception posting inline comment to {item.get('file')}:"
-                f"{item.get('line')}: {exc}"
-            )
+            fpath, line_no = item.get("file"), item.get("line")
+            logger.error(f"Exception posting inline comment to {fpath}:{line_no}: {exc}")
             results.append({
                 "file": item.get("file"),
                 "line": item.get("line"),

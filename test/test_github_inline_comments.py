@@ -18,7 +18,7 @@ from src.github_client import create_inline_review_comments
 class TestCreateInlineReviewComments:
     """Test posting individual inline review comments."""
 
-    @patch('src.github_client.requests.post')
+    @patch("src.github_client.requests.post")
     def test_posts_single_comment_successfully(self, mock_post):
         """Test posting a single inline comment."""
         mock_response = Mock()
@@ -62,7 +62,7 @@ class TestCreateInlineReviewComments:
         assert "```suggestion" in data["body"]
         assert "results = [x * 2 for x in items]" in data["body"]
 
-    @patch('src.github_client.requests.post')
+    @patch("src.github_client.requests.post")
     def test_posts_comment_without_suggestion(self, mock_post):
         """Test posting inline comment without suggestion."""
         mock_response = Mock()
@@ -94,7 +94,7 @@ class TestCreateInlineReviewComments:
         assert "Missing docstring" in data["body"]
         assert "```suggestion" not in data["body"]
 
-    @patch('src.github_client.requests.post')
+    @patch("src.github_client.requests.post")
     def test_posts_multiple_comments(self, mock_post):
         """Test posting multiple inline comments."""
         mock_response = Mock()
@@ -136,7 +136,7 @@ class TestCreateInlineReviewComments:
         assert all(r["status"] == "success" for r in results)
         assert mock_post.call_count == 3
 
-    @patch('src.github_client.requests.post')
+    @patch("src.github_client.requests.post")
     def test_skips_file_level_comments(self, mock_post):
         """Test that file-level comments (line 0) are skipped."""
         review_items = [
@@ -175,7 +175,7 @@ class TestCreateInlineReviewComments:
         # Should only post one comment (the line-level one)
         assert mock_post.call_count == 1
 
-    @patch('src.github_client.requests.post')
+    @patch("src.github_client.requests.post")
     def test_handles_api_failure(self, mock_post):
         """Test handling of API failure."""
         mock_response = Mock()
@@ -203,7 +203,7 @@ class TestCreateInlineReviewComments:
         assert results[0]["status_code"] == 422
         assert "Validation failed" in results[0]["error"]
 
-    @patch('src.github_client.requests.post')
+    @patch("src.github_client.requests.post")
     def test_handles_exception(self, mock_post):
         """Test handling of exceptions during posting."""
         mock_post.side_effect = Exception("Network error")
@@ -227,7 +227,7 @@ class TestCreateInlineReviewComments:
         assert results[0]["status"] == "error"
         assert "Network error" in results[0]["error"]
 
-    @patch('src.github_client.requests.post')
+    @patch("src.github_client.requests.post")
     def test_formats_multiline_suggestion(self, mock_post):
         """Test multiline suggestions are properly formatted."""
         mock_response = Mock()
@@ -258,7 +258,7 @@ class TestCreateInlineReviewComments:
         assert multiline_code in data["body"]
         assert "```" in data["body"]
 
-    @patch('src.github_client.requests.post')
+    @patch("src.github_client.requests.post")
     def test_empty_review_items_list(self, mock_post):
         """Test with empty review items list."""
         results = create_inline_review_comments(

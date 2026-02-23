@@ -12,6 +12,7 @@
 import os
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import click
 import google.generativeai as genai
@@ -26,6 +27,23 @@ from src.github_client import (create_a_comment_to_pull_request,
 from src.prompts import get_review_prompt
 from src.review_formatter import filter_by_severity, format_review_comment
 from src.review_parser import parse_review_response
+
+# ANSI color codes for local review output (module-level to reduce locals in print_local_review)
+_ANSI = {
+    "RED": "\033[91m",
+    "YELLOW": "\033[93m",
+    "BLUE": "\033[94m",
+    "CYAN": "\033[96m",
+    "GREEN": "\033[92m",
+    "MAGENTA": "\033[95m",
+    "GRAY": "\033[90m",
+    "BOLD": "\033[1m",
+    "DIM": "\033[2m",
+    "RESET": "\033[0m",
+    "BG_RED": "\033[101m",
+    "BG_YELLOW": "\033[103m",
+    "BG_BLUE": "\033[104m",
+}
 
 
 def generate_diff_from_files(files: tuple) -> str:
@@ -52,30 +70,18 @@ def generate_diff_from_files(files: tuple) -> str:
 
 def print_local_review(filtered_items: list, summarized_review: str, min_severity: str):
     """Print review results in human-readable format for local mode."""
-    # ANSI color codes
-    RED = "\033[91m"
-    YELLOW = "\033[93m"
-    BLUE = "\033[94m"
-    CYAN = "\033[96m"
-    GREEN = "\033[92m"
-    MAGENTA = "\033[95m"
-    GRAY = "\033[90m"
-    BOLD = "\033[1m"
-    DIM = "\033[2m"
-    RESET = "\033[0m"
-    BG_RED = "\033[101m"
-    BG_YELLOW = "\033[103m"
-    BG_BLUE = "\033[104m"
-
+    # Namespace of ANSI codes (attribute access in f-strings avoids nested quotes; Py<3.12 safe)
+    c = SimpleNamespace(**{k.lower(): v for k, v in _ANSI.items()})
+    dash_line = "─" * 74
     print("\n" + "=" * 80)
-    print(f"{BOLD}{CYAN}🤖 Gemini AI Code Review{RESET}")
+    print(f"{c.bold}{c.cyan}🤖 Gemini AI Code Review{c.reset}")
     print("=" * 80 + "\n")
 
     if not filtered_items:
-        print(f"{GREEN}{BOLD}✓ No issues found at {min_severity} level or above.{RESET}\n")
+        print(f"{c.green}{c.bold}✓ No issues found at {min_severity} level or above.{c.reset}\n")
         if summarized_review:
-            print(f"{BOLD}{CYAN}Summary:{RESET}")
-            print(f"{DIM}{summarized_review}{RESET}")
+            print(f"{c.bold}{c.cyan}Summary:{c.reset}")
+            print(f"{c.dim}{summarized_review}{c.reset}")
         return
 
     # Group by severity
@@ -94,13 +100,13 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
 
     # Print summary with counts
     total = len(filtered_items)
-    print(f"{BOLD}Found {total} issue(s):{RESET}")
+    print(f"{c.bold}Found {total} issue(s):{c.reset}")
     if critical_items:
-        print(f"  {RED}{BOLD}● {len(critical_items)} CRITICAL{RESET} {GRAY}(blocking){RESET}")
+        print(f"  {c.red}{c.bold}● {len(critical_items)} CRITICAL{c.reset} {c.gray}(blocking){c.reset}")
     if important_items:
-        print(f"  {YELLOW}{BOLD}● {len(important_items)} IMPORTANT{RESET}")
+        print(f"  {c.yellow}{c.bold}● {len(important_items)} IMPORTANT{c.reset}")
     if trivial_items:
-        print(f"  {BLUE}{BOLD}● {len(trivial_items)} TRIVIAL{RESET}")
+        print(f"  {c.blue}{c.bold}● {len(trivial_items)} TRIVIAL{c.reset}")
     print()
 
     # Print each item with enhanced formatting
@@ -113,26 +119,26 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
 
         # Choose color and styling based on severity
         if severity == "CRITICAL":
-            bg_color = BG_RED
+            bg_color = c.bg_red
             icon = "🔴"
             label = "CRITICAL"
         elif severity == "IMPORTANT":
-            bg_color = BG_YELLOW
+            bg_color = c.bg_yellow
             icon = "🟡"
             label = "IMPORTANT"
         else:
-            bg_color = BG_BLUE
+            bg_color = c.bg_blue
             icon = "🔵"
             label = "TRIVIAL"
 
         # Header with severity badge
-        print(f"{icon} {BOLD}Issue #{i}{RESET} {bg_color}{BOLD} {label} {RESET}")
+        print(f"{icon} {c.bold}Issue #{i}{c.reset} {bg_color}{c.bold} {label} {c.reset}")
 
         # File and line info with syntax highlighting
-        print(f"   {CYAN}📄 {file_name}{RESET}{GRAY}:{line_num}{RESET}")
+        print(f"   {c.cyan}📄 {file_name}{c.reset}{c.gray}:{line_num}{c.reset}")
 
         # Comment with word wrapping and indentation
-        print(f"   {MAGENTA}💬 Comment:{RESET}")
+        print(f"   {c.magenta}💬 Comment:{c.reset}")
         for comment_line in comment.split("\n"):
             # Wrap long lines
             if len(comment_line) > 70:
@@ -151,41 +157,36 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
 
         # Code suggestion with syntax highlighting
         if suggestion:
-            print(f"   {GREEN}💡 Suggested Fix:{RESET}")
-            print(f"   {GRAY}{'─' * 74}{RESET}")  # pylint: disable=inconsistent-quotes
+            print(f"   {c.green}💡 Suggested Fix:{c.reset}")
+            print(f"   {c.gray}{dash_line}{c.reset}")
 
             # Colorize code lines (basic syntax highlighting)
             for line in suggestion.split("\n"):
                 if line.strip().startswith("-"):
-                    # Removed line (red)
-                    print(f"   {RED}{line}{RESET}")
+                    print(f"   {c.red}{line}{c.reset}")
                 elif line.strip().startswith("+"):
-                    # Added line (green)
-                    print(f"   {GREEN}{line}{RESET}")
+                    print(f"   {c.green}{line}{c.reset}")
                 elif line.strip().startswith("@@"):
-                    # Diff header (cyan)
-                    print(f"   {CYAN}{line}{RESET}")
-                elif any(keyword in line for keyword in ["def ", "class ", "import ", "from "]):
-                    # Python keywords (magenta)
-                    print(f"   {MAGENTA}{line}{RESET}")
+                    print(f"   {c.cyan}{line}{c.reset}")
+                elif any(kw in line for kw in ["def ", "class ", "import ", "from "]):
+                    print(f"   {c.magenta}{line}{c.reset}")
                 else:
-                    # Regular code (dimmed)
-                    print(f"   {DIM}{line}{RESET}")
+                    print(f"   {c.dim}{line}{c.reset}")
 
-            print(f"   {GRAY}{'─' * 74}{RESET}")  # pylint: disable=inconsistent-quotes
+            print(f"   {c.gray}{dash_line}{c.reset}")
 
         print()
 
     # Overall summary with styling
     if summarized_review:
         print("=" * 80)
-        print(f"{BOLD}{CYAN}📋 Overall Summary:{RESET}")
-        print(f"{DIM}{summarized_review}{RESET}")
+        print(f"{c.bold}{c.cyan}📋 Overall Summary:{c.reset}")
+        print(f"{c.dim}{summarized_review}{c.reset}")
         print("=" * 80)
     print()
 
 
-# pylint: disable=too-many-positional-arguments,too-many-locals,broad-exception-caught
+# pylint: disable=too-many-positional-arguments,broad-exception-caught
 @click.command()
 @click.option(
     "--diff-file",
@@ -202,7 +203,11 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
     help="Pull request diff",
 )
 @click.option(
-    "--model", type=click.STRING, required=False, default="gpt-3.5-turbo", help="Model"
+    "--model",
+    type=click.STRING,
+    required=False,
+    default="gemini-2.5-flash",
+    help="Gemini model name (e.g. gemini-2.5-flash, gemini-2.5-pro)",
 )
 @click.option(
     "--extra-prompt", type=click.STRING, required=False, default="", help="Extra prompt"

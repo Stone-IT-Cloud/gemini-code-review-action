@@ -72,15 +72,9 @@ class TestLocalMode:
     @patch("src.main.get_review")
     @patch("src.main.check_required_env_vars")
     @patch("src.main.print_local_review")
-    def test_local_mode_with_critical_issues_exits_1(
-        self,
-        mock_print,
-        mock_check_env,
-        mock_get_review,
-        mock_genai,
-        mock_subprocess,
-    ):
+    def test_local_mode_with_critical_issues_exits_1(self, *mocks):
         """Test that local mode exits with code 1 when critical issues found."""
+        mock_print, _, mock_get_review, _, mock_subprocess = mocks
         # Mock subprocess to return a diff
         mock_subprocess.return_value = MagicMock(
             stdout="diff --git a/test.py b/test.py\n", returncode=0
@@ -126,15 +120,9 @@ class TestLocalMode:
     @patch("src.main.get_review")
     @patch("src.main.check_required_env_vars")
     @patch("src.main.print_local_review")
-    def test_local_mode_with_important_issues_exits_0(
-        self,
-        mock_print,
-        mock_check_env,
-        mock_get_review,
-        mock_genai,
-        mock_subprocess,
-    ):
+    def test_local_mode_with_important_issues_exits_0(self, *mocks):
         """Test that local mode exits with code 0 when only important issues found."""
+        mock_print, _, mock_get_review, _, mock_subprocess = mocks
         # Mock subprocess to return a diff
         mock_subprocess.return_value = MagicMock(
             stdout="diff --git a/test.py b/test.py\n", returncode=0
@@ -177,15 +165,9 @@ class TestLocalMode:
     @patch("src.main.get_review")
     @patch("src.main.check_required_env_vars")
     @patch("src.main.print_local_review")
-    def test_local_mode_with_no_issues_exits_0(
-        self,
-        mock_print,
-        mock_check_env,
-        mock_get_review,
-        mock_genai,
-        mock_subprocess,
-    ):
+    def test_local_mode_with_no_issues_exits_0(self, *mocks):
         """Test that local mode exits with code 0 when no issues found."""
+        mock_print, _, mock_get_review, _, mock_subprocess = mocks
         # Mock subprocess to return a diff
         mock_subprocess.return_value = MagicMock(
             stdout="diff --git a/test.py b/test.py\n", returncode=0

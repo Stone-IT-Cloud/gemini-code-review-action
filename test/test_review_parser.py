@@ -11,10 +11,9 @@
 #  limitations under the License.
 import json
 
-import pytest
-
-from src.review_parser import (REVIEW_SYSTEM_PROMPT, _validate_review_item,
-                               parse_review_response, strip_markdown_fences)
+from src.review_parser import (REVIEW_SYSTEM_PROMPT, _sanitize_suggestion,
+                               _validate_review_item, parse_review_response,
+                               strip_markdown_fences)
 
 # ---------------------------------------------------------------------------
 # strip_markdown_fences
@@ -40,6 +39,98 @@ class TestStripMarkdownFences:
     def test_no_fences_returns_stripped(self):
         raw = '  [{"file": "a.py"}]  '
         assert strip_markdown_fences(raw) == '[{"file": "a.py"}]'
+
+
+# ---------------------------------------------------------------------------
+# _sanitize_suggestion
+# ---------------------------------------------------------------------------
+
+class TestSanitizeSuggestion:
+    """Test suggestion sanitization: prose rejected, diff extracted, code preserved."""
+
+    def test_natural_language_glob_rejected(self):
+        text = (
+            "Verify that all existing glob patterns and their usage throughout "
+            "the codebase are compatible with glob v10. Thorough testing is recommended."
+        )
+        assert _sanitize_suggestion(text) is None
+
+    def test_natural_language_eslint_rejected(self):
+        text = (
+            "Review the official ESLint 10 migration guide, update ESLint configurations "
+            "to be compatible with the new version, and resolve any new linting errors."
+        )
+        assert _sanitize_suggestion(text) is None
+
+    def test_natural_language_short_rejected(self):
+        text = "Ensure all custom rules and plugins are compatible with ESLint v10."
+        assert _sanitize_suggestion(text) is None
+
+    def test_unified_diff_extracted(self):
+        raw = (
+            "--- a/package.json\n"
+            "+++ b/package.json\n"
+            "@@ -69,6 +69,7 @@\n"
+            " },\n"
+            '+ "overrides": {\n'
+            '+ "minimatch": ">=10.2.1",\n'
+            '+ "ajv": ">=6.14.0",\n'
+            '+ "test-exclude": ">=8.0.0"\n'
+            "+ }\n"
+            "+ }"
+        )
+        result = _sanitize_suggestion(raw)
+        assert result is not None
+        assert "---" not in result
+        assert "+++" not in result
+        assert "@@" not in result
+        assert '"ajv": ">=6.14.0"' in result
+        assert result.strip().startswith('"overrides"')
+
+    def test_single_line_diff_plus_extracted(self):
+        raw = '+  "ajv": ">=6.14.0",'
+        result = _sanitize_suggestion(raw)
+        assert result is not None
+        assert result == '  "ajv": ">=6.14.0",'
+
+    def test_valid_code_preserved(self):
+        code = "results = [x * 2 for x in items]"
+        assert _sanitize_suggestion(code) == code
+
+    def test_valid_code_multiline_preserved(self):
+        code = "def foo():\n    return 42"
+        assert _sanitize_suggestion(code) == code
+
+    def test_valid_code_with_capital_letter_preserved(self):
+        code = "Return True  # Python keyword as string in comment"
+        assert _sanitize_suggestion(code) == code
+
+    def test_valid_json_line_preserved(self):
+        code = '"minimatch": ">=10.2.1"'
+        assert _sanitize_suggestion(code) == code
+
+    def test_empty_returns_none(self):
+        assert _sanitize_suggestion("") is None
+        assert _sanitize_suggestion("   \n  ") is None
+
+    def test_none_returns_none(self):
+        assert _sanitize_suggestion(None) is None  # type: ignore[arg-type]
+
+    def test_non_string_returns_none(self):
+        assert _sanitize_suggestion(123) is None  # type: ignore[arg-type]
+
+    def test_diff_with_only_metadata_returns_none(self):
+        raw = "--- a/package.json\n+++ b/package.json\n@@ -1,1 +1,1 @@"
+        result = _sanitize_suggestion(raw)
+        assert result is None
+
+    def test_prose_after_diff_extraction_rejected(self):
+        raw = (
+            "--- a/x\n+++ b/x\n"
+            "+ Verify that all existing glob patterns are compatible with glob v10."
+        )
+        result = _sanitize_suggestion(raw)
+        assert result is None
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +220,7 @@ class TestParseReviewResponseValidJson:
 
     def test_empty_array(self):
         result = parse_review_response("[]")
-        assert result == []
+        assert not result
 
     def test_filters_out_invalid_items(self):
         text = json.dumps([
@@ -195,34 +286,34 @@ class TestParseReviewResponseMarkdownWrapped:
 
 class TestParseReviewResponseMalformed:
     def test_none_input(self):
-        assert parse_review_response(None) == []
+        assert not parse_review_response(None)
 
     def test_empty_string(self):
-        assert parse_review_response("") == []
+        assert not parse_review_response("")
 
     def test_whitespace_only(self):
-        assert parse_review_response("   \n\t  ") == []
+        assert not parse_review_response("   \n\t  ")
 
     def test_plain_text(self):
-        assert parse_review_response("This is just a plain text review with no JSON.") == []
+        assert not parse_review_response("This is just a plain text review with no JSON.")
 
     def test_partial_json(self):
-        assert parse_review_response('[{"file": "a.py", "line": 1') == []
+        assert not parse_review_response('[{"file": "a.py", "line": 1')
 
     def test_json_number(self):
-        assert parse_review_response("42") == []
+        assert not parse_review_response("42")
 
     def test_json_string(self):
-        assert parse_review_response('"hello"') == []
+        assert not parse_review_response('"hello"')
 
     def test_json_boolean(self):
-        assert parse_review_response("true") == []
+        assert not parse_review_response("true")
 
     def test_array_of_non_objects(self):
-        assert parse_review_response("[1, 2, 3]") == []
+        assert not parse_review_response("[1, 2, 3]")
 
     def test_array_of_strings(self):
-        assert parse_review_response('["a", "b"]') == []
+        assert not parse_review_response('["a", "b"]')
 
     def test_mixed_valid_and_non_object(self):
         text = json.dumps([
@@ -254,3 +345,8 @@ class TestReviewSystemPrompt:
 
     def test_mentions_empty_array(self):
         assert "[]" in REVIEW_SYSTEM_PROMPT
+
+    def test_suggestion_must_be_code_not_prose_or_diff(self):
+        assert "exact replacement code" in REVIEW_SYSTEM_PROMPT
+        assert "Never put natural language" in REVIEW_SYSTEM_PROMPT
+        assert "Never use unified diff format" in REVIEW_SYSTEM_PROMPT

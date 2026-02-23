@@ -43,11 +43,11 @@ inputs:
     required: true
     default: "${{ github.event.pull_request.head.sha }}"
   model:
-    description: "GPT model"
+    description: "Gemini model name (e.g. gemini-2.5-flash, gemini-2.5-pro)"
     required: true
-    default: "text-davinci-003"
+    default: "gemini-2.5-flash"
   extra_prompt:
-    description: "Extra prompt for GPT"
+    description: "Extra prompt for Gemini"
     required: false
     default: ""
   temperature:

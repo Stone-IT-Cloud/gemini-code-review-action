@@ -121,6 +121,47 @@ class TestValidateReviewItemWithSuggestion:
             assert result is not None
             assert "suggestion" not in result
 
+    def test_prose_suggestion_excluded(self):
+        """Test that natural language prose in suggestion is excluded from result."""
+        prose = (
+            "Verify that all existing glob patterns and their usage throughout "
+            "the codebase are compatible with glob v10. Thorough testing is recommended."
+        )
+        item = {
+            "file": "package-lock.json",
+            "line": 7239,
+            "severity": "critical",
+            "comment": "Major version update of glob",
+            "suggestion": prose
+        }
+        result = _validate_review_item(item)
+        assert result is not None
+        assert result["comment"] == "Major version update of glob"
+        assert "suggestion" not in result
+
+    def test_diff_suggestion_sanitized_to_code_only(self):
+        """Test that raw unified diff in suggestion is sanitized to added lines only."""
+        raw_diff = (
+            "--- a/package.json\n"
+            "+++ b/package.json\n"
+            "+ \"overrides\": {\n"
+            "+ \"ajv\": \">=6.14.0\"\n"
+            "+ }\n"
+        )
+        item = {
+            "file": "package.json",
+            "line": 45,
+            "severity": "critical",
+            "comment": "Add overrides for vulnerable deps",
+            "suggestion": raw_diff
+        }
+        result = _validate_review_item(item)
+        assert result is not None
+        assert "suggestion" in result
+        assert "---" not in result["suggestion"]
+        assert "+++" not in result["suggestion"]
+        assert '"ajv": ">=6.14.0"' in result["suggestion"]
+
     def test_multiline_suggestion(self):
         """Test that multiline suggestions are preserved."""
         multiline_code = "def foo():\n    return 42"
@@ -574,7 +615,7 @@ class TestSuggestionEdgeCases:
     def test_empty_array_with_suggestion_schema(self):
         """Test that empty array response works with new schema."""
         result = parse_review_response("[]")
-        assert result == []
+        assert not result
 
     def test_very_long_suggestion(self):
         """Test that very long suggestions are handled."""

@@ -28,7 +28,7 @@ build-docker:
 lint:
 
 lint-python:
-	pylint --rcfile=.pylintrc gpt_code_review_action
+	ruff check src/
 
 lint-docker:
 	hadolint Dockerfile

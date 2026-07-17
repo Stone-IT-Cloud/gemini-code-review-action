@@ -12,21 +12,45 @@
 default_language_version:
   python: python3.12
 repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.0
+    hooks:
+      - id: mypy
+        files: ^src/
+        language_version: python3.12
+        additional_dependencies:
+          - types-requests
+  - repo: local
+    hooks:
+      - id: xenon
+        name: xenon
+        entry: xenon --max-absolute B --max-modules B --max-average A src
+        language: system
+        files: ^src/.*\.py$
+        pass_filenames: false
+  - repo: local
+    hooks:
+      - id: bandit
+        name: bandit
+        entry: bandit -r src -c pyproject.toml
+        language: system
+        files: ^src/.*\.py$
+        pass_filenames: false
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:
       - id: end-of-file-fixer
       - id: trailing-whitespace
       - id: check-yaml
-  - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
-    hooks:
-      - id: isort
-        name: isort (python)
-  - repo: https://github.com/pycqa/pylint
-    rev: v3.3.3
-    hooks:
-    -   id: pylint
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.4
     hooks:

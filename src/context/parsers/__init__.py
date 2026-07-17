@@ -19,16 +19,14 @@ from src.context.parsers.java_parser import GradleParser, MavenParser
 from src.context.parsers.javascript_parser import JavaScriptParser
 from src.context.parsers.kubernetes_parser import KubernetesParser
 from src.context.parsers.php_parser import PHPParser
-from src.context.parsers.python_parser import (PythonPipfileParser,
-                                               PythonPyprojectParser,
-                                               PythonRequirementsParser)
+from src.context.parsers.python_parser import PythonPipfileParser, PythonPyprojectParser, PythonRequirementsParser
 from src.context.parsers.ruby_parser import RubyParser
 from src.context.parsers.rust_parser import RustParser
 from src.context.parsers.terraform_parser import TerraformParser
 
 __all__ = [
-    "DockerParser",
     "DockerComposeParser",
+    "DockerParser",
     "DotNetParser",
     "GolangParser",
     "GradleParser",

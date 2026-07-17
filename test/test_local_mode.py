@@ -10,6 +10,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 """Test local mode execution for pre-commit hooks."""
+
 import os
 import re
 import subprocess
@@ -34,9 +35,7 @@ class TestLocalMode:
     @patch("src.main.genai")
     @patch("src.main.get_review")
     @patch("src.main.check_required_env_vars")
-    def test_local_mode_with_no_staged_changes(
-        self, mock_check_env, mock_get_review, mock_genai, mock_subprocess
-    ):
+    def test_local_mode_with_no_staged_changes(self, mock_check_env, mock_get_review, mock_genai, mock_subprocess):
         """Test that local mode exits cleanly when no staged changes."""
         # Mock subprocess to return empty diff
         mock_subprocess.return_value = MagicMock(stdout="", returncode=0)
@@ -76,16 +75,11 @@ class TestLocalMode:
         """Test that local mode exits with code 1 when critical issues found."""
         mock_print, _, mock_get_review, _, mock_subprocess = mocks
         # Mock subprocess to return a diff
-        mock_subprocess.return_value = MagicMock(
-            stdout="diff --git a/test.py b/test.py\n", returncode=0
-        )
+        mock_subprocess.return_value = MagicMock(stdout="diff --git a/test.py b/test.py\n", returncode=0)
 
         # Mock review to return critical issue
         mock_get_review.return_value = (
-            [
-                '[{"file": "test.py", "line": 1, '
-                '"severity": "critical", "comment": "Security issue"}]'
-            ],
+            ['[{"file": "test.py", "line": 1, ' '"severity": "critical", "comment": "Security issue"}]'],
             "Critical security vulnerability found",
         )
 
@@ -124,9 +118,7 @@ class TestLocalMode:
         """Test that local mode exits with code 0 when only important issues found."""
         mock_print, _, mock_get_review, _, mock_subprocess = mocks
         # Mock subprocess to return a diff
-        mock_subprocess.return_value = MagicMock(
-            stdout="diff --git a/test.py b/test.py\n", returncode=0
-        )
+        mock_subprocess.return_value = MagicMock(stdout="diff --git a/test.py b/test.py\n", returncode=0)
 
         # Mock review to return important issue (not critical)
         mock_get_review.return_value = (
@@ -169,9 +161,7 @@ class TestLocalMode:
         """Test that local mode exits with code 0 when no issues found."""
         mock_print, _, mock_get_review, _, mock_subprocess = mocks
         # Mock subprocess to return a diff
-        mock_subprocess.return_value = MagicMock(
-            stdout="diff --git a/test.py b/test.py\n", returncode=0
-        )
+        mock_subprocess.return_value = MagicMock(stdout="diff --git a/test.py b/test.py\n", returncode=0)
 
         # Mock review to return no issues
         mock_get_review.return_value = (

@@ -9,10 +9,11 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+"""GitHub API client — PR comments, inline reviews, and output helpers."""
+
 import json
 import os
 import time
-from typing import List
 
 import requests
 from github import Auth, Github
@@ -41,8 +42,8 @@ def create_inline_review_comments(
     github_repository: str,
     pull_request_number: int,
     git_commit_hash: str,
-    review_items: List[dict],
-) -> List[dict]:
+    review_items: list[dict],
+) -> list[dict]:
     """Create individual inline review comments for each review item.
 
     Posts each review item as a separate inline comment using GitHub's
@@ -65,26 +66,17 @@ def create_inline_review_comments(
         "Authorization": f"Bearer {github_token}",
         "Content-Type": "application/json",
     }
-    url = (
-        f"https://api.github.com/repos/{github_repository}/"
-        f"pulls/{pull_request_number}/comments"
-    )
+    url = f"https://api.github.com/repos/{github_repository}/" f"pulls/{pull_request_number}/comments"
 
     results = []
     for item in review_items:
         # Skip file-level comments (line 0) as they require different handling
         if item.get("line", 0) == 0:
             fpath = item.get("file")
-            logger.info(
-                f"Skipping file-level comment for {fpath} "
-                "(line 0 not supported for inline comments)"
+            logger.info(f"Skipping file-level comment for {fpath} " "(line 0 not supported for inline comments)")
+            results.append(
+                {"file": item.get("file"), "line": 0, "status": "skipped", "reason": "file-level comment not supported"}
             )
-            results.append({
-                "file": item.get("file"),
-                "line": 0,
-                "status": "skipped",
-                "reason": "file-level comment not supported"
-            })
             continue
 
         # Build comment body with severity and message
@@ -107,42 +99,34 @@ def create_inline_review_comments(
         }
 
         try:
-            response = requests.post(
-                url, headers=headers, data=json.dumps(data), timeout=30
-            )
+            response = requests.post(url, headers=headers, data=json.dumps(data), timeout=30)
             if response.status_code == 201:
                 fpath, line_no = item.get("file"), item.get("line")
                 logger.info(f"Posted inline comment to {fpath}:{line_no}")
-                results.append({
-                    "file": item.get("file"),
-                    "line": item.get("line"),
-                    "status": "success",
-                    "status_code": 201
-                })
+                results.append(
+                    {"file": item.get("file"), "line": item.get("line"), "status": "success", "status_code": 201}
+                )
             else:
                 fpath, line_no = item.get("file"), item.get("line")
                 logger.error(
                     f"Failed to post inline comment to {fpath}:{line_no} - "
                     f"HTTP {response.status_code}: {response.text}"
                 )
-                results.append({
-                    "file": item.get("file"),
-                    "line": item.get("line"),
-                    "status": "failed",
-                    "status_code": response.status_code,
-                    "error": response.text
-                })
+                results.append(
+                    {
+                        "file": item.get("file"),
+                        "line": item.get("line"),
+                        "status": "failed",
+                        "status_code": response.status_code,
+                        "error": response.text,
+                    }
+                )
         except (requests.RequestException, OSError) as exc:
             # Catch network/HTTP errors so we never fail the entire review
             # due to issues posting a single comment
             fpath, line_no = item.get("file"), item.get("line")
             logger.error(f"Exception posting inline comment to {fpath}:{line_no}: {exc}")
-            results.append({
-                "file": item.get("file"),
-                "line": item.get("line"),
-                "status": "error",
-                "error": str(exc)
-            })
+            results.append({"file": item.get("file"), "line": item.get("line"), "status": "error", "error": str(exc)})
 
     return results
 
@@ -165,9 +149,36 @@ def create_a_comment_to_pull_request(
     return response
 
 
-def get_all_pr_comments_text(
-    github_token: str, github_repository: str, pull_request_number: int
-) -> str:
+def _format_issue_comment(comment: object) -> str:
+    """Format a single issue comment into a summary line."""
+    author = getattr(getattr(comment, "user", None), "login", "unknown")
+    created = getattr(comment, "created_at", "")
+    body = (getattr(comment, "body", "") or "").strip()
+    return f"- {author} ({created}): {body}"
+
+
+def _format_review_comment(rc: object) -> str:
+    """Format a single inline review comment into a summary line."""
+    author = getattr(getattr(rc, "user", None), "login", "unknown")
+    created = getattr(rc, "created_at", "")
+    path = getattr(rc, "path", "")
+    line_info = getattr(rc, "original_line", None) or getattr(rc, "line", None) or "?"
+    body = (getattr(rc, "body", "") or "").strip()
+    return f"- {author} ({created}) {path}:{line_info}: {body}"
+
+
+def _format_review_summary(r: object) -> str:
+    """Format a single PR review into a summary line."""
+    author = getattr(getattr(r, "user", None), "login", "unknown")
+    state = getattr(r, "state", "")
+    submitted = getattr(r, "submitted_at", "")
+    body = (getattr(r, "body", "") or "").strip()
+    if body:
+        return f"- {author} ({submitted}) [{state}]: {body}"
+    return f"- {author} ({submitted}) [{state}]: <no body>"
+
+
+def get_all_pr_comments_text(github_token: str, github_repository: str, pull_request_number: int) -> str:
     """Collect issue comments, review comments and reviews for a PR and format them.
 
     Returns a single text blob suitable to send as model context.
@@ -177,52 +188,27 @@ def get_all_pr_comments_text(
         repo = g.get_repo(github_repository)
         pr = repo.get_pull(pull_request_number)
 
-        # Issue comments (general discussion on the PR as an issue)
         issue_comments = list(pr.as_issue().get_comments())
-
-        # Review comments (inline file comments)
         review_comments = list(pr.get_comments())
+        reviews_list = list(pr.get_reviews())
 
-        # Reviews (summary reviews, states like APPROVED/CHANGES_REQUESTED)
-        reviews = list(pr.get_reviews())
-
-        lines: List[str] = []
+        lines: list[str] = []
         if issue_comments:
             lines.append("[Issue comments]")
-            for c in issue_comments:
-                author = getattr(getattr(c, "user", None), "login", "unknown")
-                created = getattr(c, "created_at", "")
-                body = (getattr(c, "body", "") or "").strip()
-                lines.append(f"- {author} ({created}): {body}")
+            lines.extend(_format_issue_comment(c) for c in issue_comments)
 
         if review_comments:
             lines.append("[Review comments]")
-            for c in review_comments:
-                author = getattr(getattr(c, "user", None), "login", "unknown")
-                created = getattr(c, "created_at", "")
-                path = getattr(c, "path", "")
-                line_info = (
-                    getattr(c, "original_line", None) or getattr(c, "line", None) or "?"
-                )
-                body = (getattr(c, "body", "") or "").strip()
-                lines.append(f"- {author} ({created}) {path}:{line_info}: {body}")
+            lines.extend(_format_review_comment(rc) for rc in review_comments)
 
-        if reviews:
+        if reviews_list:
             lines.append("[Reviews]")
-            for r in reviews:
-                author = getattr(getattr(r, "user", None), "login", "unknown")
-                state = getattr(r, "state", "")
-                submitted = getattr(r, "submitted_at", "")
-                body = (getattr(r, "body", "") or "").strip()
-                if body:
-                    lines.append(f"- {author} ({submitted}) [{state}]: {body}")
-                else:
-                    lines.append(f"- {author} ({submitted}) [{state}]: <no body>")
+            lines.extend(_format_review_summary(r) for r in reviews_list)
 
         joined = "\n".join(lines).strip()
         logger.info(
             f"Collected PR comments payload length: {len(joined)} characters across "
-            f"{len(issue_comments)} issue, {len(review_comments)} review, {len(reviews)} reviews"
+            f"{len(issue_comments)} issue, {len(review_comments)} review, {len(reviews_list)} reviews"
         )
         return joined
     finally:

@@ -25,20 +25,22 @@ class TestCreateInlineReviewComments:
         mock_response.status_code = 201
         mock_post.return_value = mock_response
 
-        review_items = [{
-            "file": "src/utils.py",
-            "line": 42,
-            "severity": "important",
-            "comment": "Use list comprehension",
-            "suggestion": "results = [x * 2 for x in items]"
-        }]
+        review_items = [
+            {
+                "file": "src/utils.py",
+                "line": 42,
+                "severity": "important",
+                "comment": "Use list comprehension",
+                "suggestion": "results = [x * 2 for x in items]",
+            }
+        ]
 
         results = create_inline_review_comments(
             github_token="test_token",
             github_repository="owner/repo",
             pull_request_number=123,
             git_commit_hash="abc123",
-            review_items=review_items
+            review_items=review_items,
         )
 
         assert len(results) == 1
@@ -69,19 +71,14 @@ class TestCreateInlineReviewComments:
         mock_response.status_code = 201
         mock_post.return_value = mock_response
 
-        review_items = [{
-            "file": "src/config.py",
-            "line": 10,
-            "severity": "trivial",
-            "comment": "Missing docstring"
-        }]
+        review_items = [{"file": "src/config.py", "line": 10, "severity": "trivial", "comment": "Missing docstring"}]
 
         results = create_inline_review_comments(
             github_token="test_token",
             github_repository="owner/repo",
             pull_request_number=123,
             git_commit_hash="abc123",
-            review_items=review_items
+            review_items=review_items,
         )
 
         assert len(results) == 1
@@ -102,26 +99,9 @@ class TestCreateInlineReviewComments:
         mock_post.return_value = mock_response
 
         review_items = [
-            {
-                "file": "src/utils.py",
-                "line": 42,
-                "severity": "important",
-                "comment": "Fix A",
-                "suggestion": "code_a"
-            },
-            {
-                "file": "src/auth.py",
-                "line": 15,
-                "severity": "critical",
-                "comment": "Fix B",
-                "suggestion": "code_b"
-            },
-            {
-                "file": "src/config.py",
-                "line": 8,
-                "severity": "trivial",
-                "comment": "Fix C"
-            }
+            {"file": "src/utils.py", "line": 42, "severity": "important", "comment": "Fix A", "suggestion": "code_a"},
+            {"file": "src/auth.py", "line": 15, "severity": "critical", "comment": "Fix B", "suggestion": "code_b"},
+            {"file": "src/config.py", "line": 8, "severity": "trivial", "comment": "Fix C"},
         ]
 
         results = create_inline_review_comments(
@@ -129,7 +109,7 @@ class TestCreateInlineReviewComments:
             github_repository="owner/repo",
             pull_request_number=123,
             git_commit_hash="abc123",
-            review_items=review_items
+            review_items=review_items,
         )
 
         assert len(results) == 3
@@ -140,18 +120,8 @@ class TestCreateInlineReviewComments:
     def test_skips_file_level_comments(self, mock_post):
         """Test that file-level comments (line 0) are skipped."""
         review_items = [
-            {
-                "file": "src/utils.py",
-                "line": 0,
-                "severity": "trivial",
-                "comment": "File-level comment"
-            },
-            {
-                "file": "src/auth.py",
-                "line": 15,
-                "severity": "important",
-                "comment": "Line-level comment"
-            }
+            {"file": "src/utils.py", "line": 0, "severity": "trivial", "comment": "File-level comment"},
+            {"file": "src/auth.py", "line": 15, "severity": "important", "comment": "Line-level comment"},
         ]
 
         mock_response = Mock()
@@ -163,7 +133,7 @@ class TestCreateInlineReviewComments:
             github_repository="owner/repo",
             pull_request_number=123,
             git_commit_hash="abc123",
-            review_items=review_items
+            review_items=review_items,
         )
 
         assert len(results) == 2
@@ -183,19 +153,14 @@ class TestCreateInlineReviewComments:
         mock_response.text = "Validation failed"
         mock_post.return_value = mock_response
 
-        review_items = [{
-            "file": "src/utils.py",
-            "line": 42,
-            "severity": "important",
-            "comment": "Test"
-        }]
+        review_items = [{"file": "src/utils.py", "line": 42, "severity": "important", "comment": "Test"}]
 
         results = create_inline_review_comments(
             github_token="test_token",
             github_repository="owner/repo",
             pull_request_number=123,
             git_commit_hash="abc123",
-            review_items=review_items
+            review_items=review_items,
         )
 
         assert len(results) == 1
@@ -208,19 +173,14 @@ class TestCreateInlineReviewComments:
         """Test handling of exceptions during posting."""
         mock_post.side_effect = Exception("Network error")
 
-        review_items = [{
-            "file": "src/utils.py",
-            "line": 42,
-            "severity": "important",
-            "comment": "Test"
-        }]
+        review_items = [{"file": "src/utils.py", "line": 42, "severity": "important", "comment": "Test"}]
 
         results = create_inline_review_comments(
             github_token="test_token",
             github_repository="owner/repo",
             pull_request_number=123,
             git_commit_hash="abc123",
-            review_items=review_items
+            review_items=review_items,
         )
 
         assert len(results) == 1
@@ -235,20 +195,22 @@ class TestCreateInlineReviewComments:
         mock_post.return_value = mock_response
 
         multiline_code = "def foo():\n    x = 1\n    return x"
-        review_items = [{
-            "file": "src/utils.py",
-            "line": 42,
-            "severity": "important",
-            "comment": "Refactor function",
-            "suggestion": multiline_code
-        }]
+        review_items = [
+            {
+                "file": "src/utils.py",
+                "line": 42,
+                "severity": "important",
+                "comment": "Refactor function",
+                "suggestion": multiline_code,
+            }
+        ]
 
         create_inline_review_comments(
             github_token="test_token",
             github_repository="owner/repo",
             pull_request_number=123,
             git_commit_hash="abc123",
-            review_items=review_items
+            review_items=review_items,
         )
 
         # Verify multiline code is in suggestion block
@@ -266,7 +228,7 @@ class TestCreateInlineReviewComments:
             github_repository="owner/repo",
             pull_request_number=123,
             git_commit_hash="abc123",
-            review_items=[]
+            review_items=[],
         )
 
         assert len(results) == 0

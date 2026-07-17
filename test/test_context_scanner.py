@@ -17,8 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from src.context.scanner import (MAX_BYTES_PER_FILE, MAX_LINES_PER_FILE,
-                                 ContextScanner)
+from src.context.scanner import MAX_BYTES_PER_FILE, MAX_LINES_PER_FILE, ContextScanner
 
 
 class TestContextScannerFileReading:
@@ -102,14 +101,16 @@ class TestPythonScanning:
         """Test scanning Pipfile."""
         with tempfile.TemporaryDirectory() as tmpdir:
             pipfile = Path(tmpdir) / "Pipfile"
-            pipfile.write_text("""
+            pipfile.write_text(
+                """
 [packages]
 requests = "*"
 flask = ">=2.0"
 
 [dev-packages]
 pytest = "*"
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -121,7 +122,8 @@ pytest = "*"
         """Test scanning pyproject.toml."""
         with tempfile.TemporaryDirectory() as tmpdir:
             pyproject = Path(tmpdir) / "pyproject.toml"
-            pyproject.write_text("""
+            pyproject.write_text(
+                """
 [tool.poetry.dependencies]
 python = "^3.9"
 requests = "^2.28.0"
@@ -130,7 +132,8 @@ requests = "^2.28.0"
 dependencies = [
     "flask>=2.0",
 ]
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -159,15 +162,14 @@ class TestPHPScanning:
         """Test scanning composer.json with Laravel."""
         with tempfile.TemporaryDirectory() as tmpdir:
             composer = Path(tmpdir) / "composer.json"
-            composer.write_text(json.dumps({
-                "require": {
-                    "php": "^8.0",
-                    "laravel/framework": "^9.0"
-                },
-                "require-dev": {
-                    "phpunit/phpunit": "^9.5"
-                }
-            }))
+            composer.write_text(
+                json.dumps(
+                    {
+                        "require": {"php": "^8.0", "laravel/framework": "^9.0"},
+                        "require-dev": {"phpunit/phpunit": "^9.5"},
+                    }
+                )
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -180,11 +182,7 @@ class TestPHPScanning:
         """Test scanning composer.json with Symfony."""
         with tempfile.TemporaryDirectory() as tmpdir:
             composer = Path(tmpdir) / "composer.json"
-            composer.write_text(json.dumps({
-                "require": {
-                    "symfony/framework-bundle": "^6.0"
-                }
-            }))
+            composer.write_text(json.dumps({"require": {"symfony/framework-bundle": "^6.0"}}))
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -212,20 +210,16 @@ class TestJavaScriptScanning:
         """Test scanning package.json."""
         with tempfile.TemporaryDirectory() as tmpdir:
             package = Path(tmpdir) / "package.json"
-            package.write_text(json.dumps({
-                "name": "my-app",
-                "dependencies": {
-                    "react": "^18.0.0",
-                    "express": "^4.18.0"
-                },
-                "devDependencies": {
-                    "jest": "^29.0.0"
-                },
-                "scripts": {
-                    "test": "jest",
-                    "build": "webpack"
-                }
-            }))
+            package.write_text(
+                json.dumps(
+                    {
+                        "name": "my-app",
+                        "dependencies": {"react": "^18.0.0", "express": "^4.18.0"},
+                        "devDependencies": {"jest": "^29.0.0"},
+                        "scripts": {"test": "jest", "build": "webpack"},
+                    }
+                )
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -255,7 +249,8 @@ class TestGolangScanning:
         """Test scanning go.mod."""
         with tempfile.TemporaryDirectory() as tmpdir:
             gomod = Path(tmpdir) / "go.mod"
-            gomod.write_text("""module github.com/user/myapp
+            gomod.write_text(
+                """module github.com/user/myapp
 
 go 1.19
 
@@ -263,7 +258,8 @@ require (
     github.com/gin-gonic/gin v1.8.1
     github.com/spf13/cobra v1.6.0
 )
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -293,13 +289,15 @@ class TestRubyScanning:
         """Test scanning Gemfile with Rails."""
         with tempfile.TemporaryDirectory() as tmpdir:
             gemfile = Path(tmpdir) / "Gemfile"
-            gemfile.write_text("""
+            gemfile.write_text(
+                """
 source 'https://rubygems.org'
 
 gem 'rails', '~> 7.0.4'
 gem 'pg', '~> 1.1'
 gem 'puma', '~> 5.0'
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -312,10 +310,12 @@ gem 'puma', '~> 5.0'
         """Test scanning Gemfile without Rails."""
         with tempfile.TemporaryDirectory() as tmpdir:
             gemfile = Path(tmpdir) / "Gemfile"
-            gemfile.write_text("""
+            gemfile.write_text(
+                """
 gem 'sinatra'
 gem 'rack'
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -331,7 +331,8 @@ class TestJavaScanning:
         """Test scanning pom.xml."""
         with tempfile.TemporaryDirectory() as tmpdir:
             pom = Path(tmpdir) / "pom.xml"
-            pom.write_text("""<?xml version="1.0"?>
+            pom.write_text(
+                """<?xml version="1.0"?>
 <project>
     <groupId>com.example</groupId>
     <artifactId>my-app</artifactId>
@@ -340,7 +341,8 @@ class TestJavaScanning:
         <maven.compiler.source>17</maven.compiler.source>
     </properties>
 </project>
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -354,14 +356,16 @@ class TestJavaScanning:
         """Test scanning build.gradle."""
         with tempfile.TemporaryDirectory() as tmpdir:
             gradle = Path(tmpdir) / "build.gradle"
-            gradle.write_text("""
+            gradle.write_text(
+                """
 sourceCompatibility = '17'
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     testImplementation 'junit:junit:4.13'
 }
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -377,7 +381,8 @@ class TestDotNetScanning:
         """Test scanning .csproj file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             csproj = Path(tmpdir) / "MyApp.csproj"
-            csproj.write_text("""<Project Sdk="Microsoft.NET.Sdk">
+            csproj.write_text(
+                """<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFramework>net7.0</TargetFramework>
     </PropertyGroup>
@@ -386,7 +391,8 @@ class TestDotNetScanning:
         <PackageReference Include="Serilog" Version="2.12.0" />
     </ItemGroup>
 </Project>
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -399,12 +405,14 @@ class TestDotNetScanning:
         """Test scanning .fsproj file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             fsproj = Path(tmpdir) / "MyApp.fsproj"
-            fsproj.write_text("""<Project Sdk="Microsoft.NET.Sdk">
+            fsproj.write_text(
+                """<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFramework>net6.0</TargetFramework>
     </PropertyGroup>
 </Project>
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -419,7 +427,8 @@ class TestRustScanning:
         """Test scanning Cargo.toml."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cargo = Path(tmpdir) / "Cargo.toml"
-            cargo.write_text("""[package]
+            cargo.write_text(
+                """[package]
 name = "my-rust-app"
 version = "0.1.0"
 edition = "2021"
@@ -427,7 +436,8 @@ edition = "2021"
 [dependencies]
 serde = "1.0"
 tokio = { version = "1.0", features = ["full"] }
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -444,11 +454,13 @@ class TestDockerScanning:
         """Test scanning Dockerfile."""
         with tempfile.TemporaryDirectory() as tmpdir:
             dockerfile = Path(tmpdir) / "Dockerfile"
-            dockerfile.write_text("""FROM python:3.11-slim AS base
+            dockerfile.write_text(
+                """FROM python:3.11-slim AS base
 FROM base AS builder
 EXPOSE 8000
 EXPOSE 8080
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -461,7 +473,8 @@ EXPOSE 8080
         """Test scanning docker-compose.yml."""
         with tempfile.TemporaryDirectory() as tmpdir:
             compose = Path(tmpdir) / "docker-compose.yml"
-            compose.write_text("""version: '3.8'
+            compose.write_text(
+                """version: '3.8'
 services:
   web:
     build: .
@@ -469,7 +482,8 @@ services:
       - "8000:8000"
   db:
     image: postgres:14
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -482,10 +496,12 @@ services:
         """Test scanning docker-compose.yaml (alternative extension)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             compose = Path(tmpdir) / "docker-compose.yaml"
-            compose.write_text("""services:
+            compose.write_text(
+                """services:
   api:
     build: .
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -496,10 +512,12 @@ services:
         """Test scanning compose.yml (Docker Compose V2 naming)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             compose = Path(tmpdir) / "compose.yml"
-            compose.write_text("""services:
+            compose.write_text(
+                """services:
   web:
     image: nginx
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -511,10 +529,12 @@ services:
         """Test scanning compose.yaml (Docker Compose V2 naming)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             compose = Path(tmpdir) / "compose.yaml"
-            compose.write_text("""services:
+            compose.write_text(
+                """services:
   app:
     build: .
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -532,7 +552,8 @@ class TestKubernetesScanning:
             k8s_dir = Path(tmpdir) / "k8s"
             k8s_dir.mkdir()
 
-            (k8s_dir / "deployment.yaml").write_text("""apiVersion: apps/v1
+            (k8s_dir / "deployment.yaml").write_text(
+                """apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: my-app
@@ -542,12 +563,15 @@ spec:
       containers:
       - name: app
         image: nginx:1.19
-""")
-            (k8s_dir / "service.yml").write_text("""apiVersion: v1
+"""
+            )
+            (k8s_dir / "service.yml").write_text(
+                """apiVersion: v1
 kind: Service
 metadata:
   name: my-service
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -575,11 +599,13 @@ class TestHelmScanning:
         """Test scanning Chart.yaml."""
         with tempfile.TemporaryDirectory() as tmpdir:
             chart = Path(tmpdir) / "Chart.yaml"
-            chart.write_text("""apiVersion: v2
+            chart.write_text(
+                """apiVersion: v2
 name: my-chart
 version: 1.2.3
 appVersion: "2.0"
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -610,7 +636,8 @@ class TestTerraformScanning:
         """Test scanning .tf files."""
         with tempfile.TemporaryDirectory() as tmpdir:
             main_tf = Path(tmpdir) / "main.tf"
-            main_tf.write_text("""terraform {
+            main_tf.write_text(
+                """terraform {
   required_version = ">= 1.0"
   required_providers {
     aws = {
@@ -627,7 +654,8 @@ resource "aws_instance" "web" {
 resource "aws_s3_bucket" "data" {
   bucket = "my-bucket"
 }
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -645,14 +673,16 @@ class TestDocumentationScanning:
         """Test scanning README.md."""
         with tempfile.TemporaryDirectory() as tmpdir:
             readme = Path(tmpdir) / "README.md"
-            readme.write_text("""# My Project
+            readme.write_text(
+                """# My Project
 
 This is a great project that does amazing things.
 
 ## Installation
 
 Run npm install.
-""")
+"""
+            )
 
             scanner = ContextScanner(tmpdir)
             context = scanner.scan()
@@ -744,9 +774,7 @@ class TestContextSummary:
         """Test summary includes framework details."""
         with tempfile.TemporaryDirectory() as tmpdir:
             composer = Path(tmpdir) / "composer.json"
-            composer.write_text(json.dumps({
-                "require": {"laravel/framework": "^9.0"}
-            }))
+            composer.write_text(json.dumps({"require": {"laravel/framework": "^9.0"}}))
 
             scanner = ContextScanner(tmpdir)
             scanner.scan()

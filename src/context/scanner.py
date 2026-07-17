@@ -12,17 +12,28 @@
 """Context scanner for polyglot project analysis."""
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from loguru import logger
 
-from src.context.parsers import (DockerComposeParser, DockerParser,
-                                 DotNetParser, GolangParser, GradleParser,
-                                 HelmParser, JavaScriptParser,
-                                 KubernetesParser, MavenParser, PHPParser,
-                                 PythonPipfileParser, PythonPyprojectParser,
-                                 PythonRequirementsParser, RubyParser,
-                                 RustParser, TerraformParser)
+from src.context.parsers import (
+    DockerComposeParser,
+    DockerParser,
+    DotNetParser,
+    GolangParser,
+    GradleParser,
+    HelmParser,
+    JavaScriptParser,
+    KubernetesParser,
+    MavenParser,
+    PHPParser,
+    PythonPipfileParser,
+    PythonPyprojectParser,
+    PythonRequirementsParser,
+    RubyParser,
+    RustParser,
+    TerraformParser,
+)
 
 # Token budget constraints
 MAX_BYTES_PER_FILE = 2048  # 2KB
@@ -42,9 +53,9 @@ class ContextScanner:
             repo_root: Path to the repository root directory
         """
         self.repo_root = Path(repo_root)
-        self.context: Dict[str, Any] = {}
+        self.context: dict[str, Any] = {}
 
-    def read_file_limited(self, filepath: Path) -> Optional[str]:
+    def read_file_limited(self, filepath: Path) -> str | None:
         """Read file content with token budget limits.
 
         Limits content to 2KB or 50 lines, whichever comes first.
@@ -84,8 +95,7 @@ class ContextScanner:
         content = self.read_file_limited(req_path)
         if content is not None:
             try:
-                parser = PythonRequirementsParser()
-                self.context["python_requirements"] = parser.parse(content)
+                self.context["python_requirements"] = PythonRequirementsParser().parse(content)
             except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse requirements.txt: {exc}")
 
@@ -94,8 +104,7 @@ class ContextScanner:
         content = self.read_file_limited(pipfile_path)
         if content is not None:
             try:
-                parser = PythonPipfileParser()
-                self.context["python_pipfile"] = parser.parse(content)
+                self.context["python_pipfile"] = PythonPipfileParser().parse(content)
             except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse Pipfile: {exc}")
 
@@ -104,8 +113,7 @@ class ContextScanner:
         content = self.read_file_limited(pyproject_path)
         if content is not None:
             try:
-                parser = PythonPyprojectParser()
-                self.context["python_pyproject"] = parser.parse(content)
+                self.context["python_pyproject"] = PythonPyprojectParser().parse(content)
             except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse pyproject.toml: {exc}")
 
@@ -160,8 +168,7 @@ class ContextScanner:
         content = self.read_file_limited(pom_path)
         if content is not None:
             try:
-                parser = MavenParser()
-                self.context["java_pom"] = parser.parse(content)
+                self.context["java_pom"] = MavenParser().parse(content)
             except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse pom.xml: {exc}")
 
@@ -170,8 +177,7 @@ class ContextScanner:
         content = self.read_file_limited(gradle_path)
         if content is not None:
             try:
-                parser = GradleParser()
-                self.context["java_gradle"] = parser.parse(content)
+                self.context["java_gradle"] = GradleParser().parse(content)
             except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse build.gradle: {exc}")
 
@@ -208,25 +214,18 @@ class ContextScanner:
         content = self.read_file_limited(dockerfile_path)
         if content is not None:
             try:
-                parser = DockerParser()
-                self.context["docker_dockerfile"] = parser.parse(content)
+                self.context["docker_dockerfile"] = DockerParser().parse(content)
             except PARSER_EXCEPTIONS as exc:
                 logger.debug(f"Failed to parse Dockerfile: {exc}")
 
         # docker-compose files (v1 and v2 naming conventions)
-        compose_files = [
-            "docker-compose.yml",
-            "docker-compose.yaml",
-            "compose.yml",
-            "compose.yaml"
-        ]
+        compose_files = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]
         for compose_name in compose_files:
             compose_path = self.repo_root / compose_name
             content = self.read_file_limited(compose_path)
             if content is not None:
                 try:
-                    parser = DockerComposeParser()
-                    self.context["docker_compose"] = parser.parse(content)
+                    self.context["docker_compose"] = DockerComposeParser().parse(content)
                     break
                 except PARSER_EXCEPTIONS as exc:
                     logger.debug(f"Failed to parse {compose_name}: {exc}")
@@ -235,7 +234,7 @@ class ContextScanner:
         """Scan for Kubernetes configuration files."""
         # Scan YAML files across the entire repo, focusing on specific Kubernetes kinds
         target_kinds = {"Deployment", "StatefulSet", "Service"}
-        k8s_resources = []
+        k8s_resources: list[dict] = []
         max_resources = 10
         max_files_scanned = 200
         files_scanned = 0
@@ -267,10 +266,7 @@ class ContextScanner:
                 logger.debug(f"Failed to parse {path}: {exc}")
 
         if k8s_resources:
-            self.context["kubernetes_resources"] = {
-                "type": "kubernetes",
-                "resources": k8s_resources[:max_resources]
-            }
+            self.context["kubernetes_resources"] = {"type": "kubernetes", "resources": k8s_resources[:max_resources]}
 
     def _scan_helm(self) -> None:
         """Scan for Helm chart files."""
@@ -290,31 +286,30 @@ class ContextScanner:
         if content is not None:
             # Store first 50 lines as they often contain global config
             lines = content.split("\n")[:50]  # First 50 lines as preview
-            self.context["helm_values"] = {
-                "type": "values.yaml",
-                "preview": "\n".join(lines)
-            }
+            self.context["helm_values"] = {"type": "values.yaml", "preview": "\n".join(lines)}
+
+    def _pick_terraform_file(self, tf_files: list) -> object:  # type: ignore[type-arg]
+        """Pick the best Terraform file to analyze (prefer main.tf, then provider.tf)."""
+        selected = next((f for f in tf_files if f.name == "main.tf"), None)
+        if selected is None:
+            selected = next((f for f in tf_files if f.name == "provider.tf"), None)
+        return selected or tf_files[0]
 
     def _scan_terraform(self) -> None:
         """Scan for Terraform configuration files."""
-        # Find .tf files
         tf_files = list(self.repo_root.glob("*.tf"))
-        if tf_files:
-            # Prefer main.tf, then provider.tf, then fall back to the first file
-            selected_tf = next((f for f in tf_files if f.name == "main.tf"), None)
-            if selected_tf is None:
-                selected_tf = next((f for f in tf_files if f.name == "provider.tf"), None)
-            if selected_tf is None:
-                selected_tf = tf_files[0]
+        if not tf_files:
+            return
 
-            content = self.read_file_limited(selected_tf)
-            if content is not None:
-                try:
-                    parser = TerraformParser()
-                    self.context["terraform"] = parser.parse(content)
-                    self.context["terraform"]["files_found"] = [f.name for f in tf_files[:10]]
-                except PARSER_EXCEPTIONS as exc:
-                    logger.debug(f"Failed to parse {selected_tf}: {exc}")
+        selected_tf = self._pick_terraform_file(tf_files)
+        content = self.read_file_limited(selected_tf)  # type: ignore[arg-type]
+        if content is not None:
+            try:
+                parser = TerraformParser()
+                self.context["terraform"] = parser.parse(content)
+                self.context["terraform"]["files_found"] = [f.name for f in tf_files[:10]]
+            except PARSER_EXCEPTIONS as exc:
+                logger.debug(f"Failed to parse {selected_tf}: {exc}")
 
     def _scan_documentation(self) -> None:
         """Scan for critical Markdown documentation."""
@@ -335,21 +330,18 @@ class ContextScanner:
         docs_dir = self.repo_root / "docs"
         if docs_dir.exists() and docs_dir.is_dir():
             md_files = list(docs_dir.glob("*.md"))[:2]  # Limit to first 2 files
-            for doc_file in md_files:
-                content = self.read_file_limited(doc_file)
+            for md_file in md_files:
+                content = self.read_file_limited(md_file)
                 if content:
                     # Extract first ~2000 chars for better context
                     if len(content) > 2000:
                         content = content[:2000] + "..."
-                    docs[f"docs/{doc_file.name}"] = content
+                    docs[f"docs/{md_file.name}"] = content
 
         if docs:
-            self.context["documentation"] = {
-                "type": "markdown_docs",
-                "files": docs
-            }
+            self.context["documentation"] = {"type": "markdown_docs", "files": docs}
 
-    def scan(self) -> Dict[str, Any]:
+    def scan(self) -> dict[str, Any]:
         """Scan the repository for configuration files.
 
         Returns:
@@ -378,6 +370,51 @@ class ContextScanner:
         logger.info(f"Found {len(self.context)} context items")
         return self.context
 
+    def _collect_detected_technologies(self) -> list[str]:
+        """Collect detected programming languages/frameworks from context."""
+        ctx = self.context
+        checks: list[tuple[str, bool]] = [
+            ("Python", "python_requirements" in ctx or "python_pipfile" in ctx or "python_pyproject" in ctx),
+            ("PHP", "php_composer" in ctx),
+            ("JavaScript/TypeScript", "javascript_package" in ctx),
+            ("Go", "golang_mod" in ctx),
+            ("Ruby", "ruby_gemfile" in ctx),
+            ("Java", "java_pom" in ctx or "java_gradle" in ctx),
+            (".NET", any(k.startswith("dotnet_") for k in ctx)),
+            ("Rust", "rust_cargo" in ctx),
+        ]
+        return [name for name, present in checks if present]
+
+    def _collect_infrastructure(self) -> list[str]:
+        """Collect detected infrastructure tools from context."""
+        infra: list[str] = []
+        if "docker_dockerfile" in self.context or "docker_compose" in self.context:
+            infra.append("Docker")
+        if "kubernetes_resources" in self.context:
+            infra.append("Kubernetes")
+        if "helm_chart" in self.context:
+            infra.append("Helm")
+        if "terraform" in self.context:
+            infra.append("Terraform")
+        return infra
+
+    def _collect_framework_details(self) -> list[str]:
+        """Collect framework-specific details from context."""
+        details: list[str] = []
+        if "php_composer" in self.context:
+            composer = self.context["php_composer"]
+            if "framework" in composer:
+                details.append(f"**PHP Framework:** {composer['framework']}")
+        if "ruby_gemfile" in self.context:
+            gemfile = self.context["ruby_gemfile"]
+            if "rails_version" in gemfile:
+                details.append(f"**Rails Version:** {gemfile['rails_version']}")
+        if "golang_mod" in self.context:
+            gomod = self.context["golang_mod"]
+            if "go_version" in gomod:
+                details.append(f"**Go Version:** {gomod['go_version']}")
+        return details
+
     def get_context_summary(self) -> str:
         """Generate a formatted summary of the scanned context.
 
@@ -389,63 +426,14 @@ class ContextScanner:
 
         lines = ["## Project Context"]
 
-        # Language/Framework detection
-        detected_techs = []
-        if ("python_requirements" in self.context or
-                "python_pipfile" in self.context or
-                "python_pyproject" in self.context):
-            detected_techs.append("Python")
-        if "php_composer" in self.context:
-            detected_techs.append("PHP")
-        if "javascript_package" in self.context:
-            detected_techs.append("JavaScript/TypeScript")
-        if "golang_mod" in self.context:
-            detected_techs.append("Go")
-        if "ruby_gemfile" in self.context:
-            detected_techs.append("Ruby")
-        if "java_pom" in self.context or "java_gradle" in self.context:
-            detected_techs.append("Java")
-        if any(k.startswith("dotnet_") for k in self.context):
-            detected_techs.append(".NET")
-        if "rust_cargo" in self.context:
-            detected_techs.append("Rust")
-
+        detected_techs = self._collect_detected_technologies()
         if detected_techs:
-            tech_list = ", ".join(detected_techs)
-            lines.append(f"**Technologies:** {tech_list}")
+            lines.append(f"**Technologies:** {', '.join(detected_techs)}")
 
-        # Infrastructure
-        infra_techs = []
-        if "docker_dockerfile" in self.context or "docker_compose" in self.context:
-            infra_techs.append("Docker")
-        if "kubernetes_resources" in self.context:
-            infra_techs.append("Kubernetes")
-        if "helm_chart" in self.context:
-            infra_techs.append("Helm")
-        if "terraform" in self.context:
-            infra_techs.append("Terraform")
-
+        infra_techs = self._collect_infrastructure()
         if infra_techs:
-            infra_list = ", ".join(infra_techs)
-            lines.append(f"**Infrastructure:** {infra_list}")
+            lines.append(f"**Infrastructure:** {', '.join(infra_techs)}")
 
-        # Framework-specific details
-        if "php_composer" in self.context:
-            composer = self.context["php_composer"]
-            if "framework" in composer:
-                fw = composer["framework"]
-                lines.append(f"**PHP Framework:** {fw}")
-
-        if "ruby_gemfile" in self.context:
-            gemfile = self.context["ruby_gemfile"]
-            if "rails_version" in gemfile:
-                rv = gemfile["rails_version"]
-                lines.append(f"**Rails Version:** {rv}")
-
-        if "golang_mod" in self.context:
-            gomod = self.context["golang_mod"]
-            if "go_version" in gomod:
-                gv = gomod["go_version"]
-                lines.append(f"**Go Version:** {gv}")
+        lines.extend(self._collect_framework_details())
 
         return "\n".join(lines)

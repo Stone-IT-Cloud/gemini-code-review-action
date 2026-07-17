@@ -9,9 +9,12 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+"""CLI entry point for Gemini Code Review — local and CI modes."""
+
 import os
 import subprocess
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import click
@@ -21,9 +24,12 @@ from loguru import logger
 
 from src.config import AiReviewConfig, check_required_env_vars
 from src.gemini_client import get_review
-from src.github_client import (create_a_comment_to_pull_request,
-                               create_inline_review_comments,
-                               get_all_pr_comments_text, write_github_output)
+from src.github_client import (
+    create_a_comment_to_pull_request,
+    create_inline_review_comments,
+    get_all_pr_comments_text,
+    write_github_output,
+)
 from src.prompts import get_review_prompt
 from src.review_formatter import filter_by_severity, format_review_comment
 from src.review_parser import parse_review_response
@@ -68,37 +74,19 @@ def generate_diff_from_files(files: tuple) -> str:
     return "\n".join(all_diffs)
 
 
-def print_local_review(filtered_items: list, summarized_review: str, min_severity: str):
-    """Print review results in human-readable format for local mode."""
-    # Namespace of ANSI codes (attribute access in f-strings avoids nested quotes; Py<3.12 safe)
-    c = SimpleNamespace(**{k.lower(): v for k, v in _ANSI.items()})
-    dash_line = "─" * 74
+def _print_review_title(c: SimpleNamespace) -> None:
+    """Print the review title banner."""
     print("\n" + "=" * 80)
     print(f"{c.bold}{c.cyan}🤖 Gemini AI Code Review{c.reset}")
     print("=" * 80 + "\n")
 
-    if not filtered_items:
-        print(f"{c.green}{c.bold}✓ No issues found at {min_severity} level or above.{c.reset}\n")
-        if summarized_review:
-            print(f"{c.bold}{c.cyan}Summary:{c.reset}")
-            print(f"{c.dim}{summarized_review}{c.reset}")
-        return
 
-    # Group by severity
-    critical_items = [
-        item for item in filtered_items
-        if item.get("severity", "").lower() == "critical"
-    ]
-    important_items = [
-        item for item in filtered_items
-        if item.get("severity", "").lower() == "important"
-    ]
-    trivial_items = [
-        item for item in filtered_items
-        if item.get("severity", "").lower() == "trivial"
-    ]
+def _print_severity_summary(filtered_items: list, min_severity: str, c: SimpleNamespace) -> None:
+    """Group items by severity and print counts."""
+    critical_items = [item for item in filtered_items if item.get("severity", "").lower() == "critical"]
+    important_items = [item for item in filtered_items if item.get("severity", "").lower() == "important"]
+    trivial_items = [item for item in filtered_items if item.get("severity", "").lower() == "trivial"]
 
-    # Print summary with counts
     total = len(filtered_items)
     print(f"{c.bold}Found {total} issue(s):{c.reset}")
     if critical_items:
@@ -109,81 +97,277 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
         print(f"  {c.blue}{c.bold}● {len(trivial_items)} TRIVIAL{c.reset}")
     print()
 
-    # Print each item with enhanced formatting
-    for i, item in enumerate(filtered_items, 1):
-        severity = item.get("severity", "unknown").upper()
-        file_name = item.get("file", "unknown")
-        line_num = item.get("line", "?")
-        comment = item.get("comment", "")
-        suggestion = item.get("suggestion", "")
 
-        # Choose color and styling based on severity
-        if severity == "CRITICAL":
-            bg_color = c.bg_red
-            icon = "🔴"
-            label = "CRITICAL"
-        elif severity == "IMPORTANT":
-            bg_color = c.bg_yellow
-            icon = "🟡"
-            label = "IMPORTANT"
+def _severity_display(severity: str, c: SimpleNamespace) -> tuple:
+    """Get display colors and labels for a severity level.
+
+    Returns:
+        Tuple of (background_color, icon, label).
+    """
+    if severity == "CRITICAL":
+        return c.bg_red, "🔴", "CRITICAL"
+    if severity == "IMPORTANT":
+        return c.bg_yellow, "🟡", "IMPORTANT"
+    return c.bg_blue, "🔵", "TRIVIAL"
+
+
+def _render_suggestion_block(suggestion: str, dash_line: str, c: SimpleNamespace) -> None:
+    """Print a suggestion with basic syntax highlighting."""
+    print(f"   {c.green}💡 Suggested Fix:{c.reset}")
+    print(f"   {c.gray}{dash_line}{c.reset}")
+
+    for line in suggestion.split("\n"):
+        if line.strip().startswith("-"):
+            print(f"   {c.red}{line}{c.reset}")
+        elif line.strip().startswith("+"):
+            print(f"   {c.green}{line}{c.reset}")
+        elif line.strip().startswith("@@"):
+            print(f"   {c.cyan}{line}{c.reset}")
+        elif any(kw in line for kw in ["def ", "class ", "import ", "from "]):
+            print(f"   {c.magenta}{line}{c.reset}")
         else:
-            bg_color = c.bg_blue
-            icon = "🔵"
-            label = "TRIVIAL"
+            print(f"   {c.dim}{line}{c.reset}")
 
-        # Header with severity badge
-        print(f"{icon} {c.bold}Issue #{i}{c.reset} {bg_color}{c.bold} {label} {c.reset}")
+    print(f"   {c.gray}{dash_line}{c.reset}")
 
-        # File and line info with syntax highlighting
-        print(f"   {c.cyan}📄 {file_name}{c.reset}{c.gray}:{line_num}{c.reset}")
 
-        # Comment with word wrapping and indentation
-        print(f"   {c.magenta}💬 Comment:{c.reset}")
-        for comment_line in comment.split("\n"):
-            # Wrap long lines
-            if len(comment_line) > 70:
-                words = comment_line.split()
-                current_line = "      "
-                for word in words:
-                    if len(current_line) + len(word) + 1 > 76:
-                        print(current_line)
-                        current_line = "      " + word
-                    else:
-                        current_line += " " + word if current_line.strip() else word
-                if current_line.strip():
+def _render_comment_block(comment: str) -> None:
+    """Print a comment with word wrapping and indentation."""
+    for comment_line in comment.split("\n"):
+        if len(comment_line) > 70:
+            words = comment_line.split()
+            current_line = "      "
+            for word in words:
+                if len(current_line) + len(word) + 1 > 76:
                     print(current_line)
-            else:
-                print(f"      {comment_line}")
-
-        # Code suggestion with syntax highlighting
-        if suggestion:
-            print(f"   {c.green}💡 Suggested Fix:{c.reset}")
-            print(f"   {c.gray}{dash_line}{c.reset}")
-
-            # Colorize code lines (basic syntax highlighting)
-            for line in suggestion.split("\n"):
-                if line.strip().startswith("-"):
-                    print(f"   {c.red}{line}{c.reset}")
-                elif line.strip().startswith("+"):
-                    print(f"   {c.green}{line}{c.reset}")
-                elif line.strip().startswith("@@"):
-                    print(f"   {c.cyan}{line}{c.reset}")
-                elif any(kw in line for kw in ["def ", "class ", "import ", "from "]):
-                    print(f"   {c.magenta}{line}{c.reset}")
+                    current_line = "      " + word
                 else:
-                    print(f"   {c.dim}{line}{c.reset}")
+                    current_line += " " + word if current_line.strip() else word
+            if current_line.strip():
+                print(current_line)
+        else:
+            print(f"      {comment_line}")
 
-            print(f"   {c.gray}{dash_line}{c.reset}")
 
-        print()
+def _render_item(item: dict, index: int, dash_line: str, c: SimpleNamespace) -> None:
+    """Print a single review item with full formatting."""
+    severity = item.get("severity", "unknown").upper()
+    file_name = item.get("file", "unknown")
+    line_num = item.get("line", "?")
+    comment = item.get("comment", "")
+    suggestion = item.get("suggestion", "")
 
-    # Overall summary with styling
-    if summarized_review:
-        print("=" * 80)
-        print(f"{c.bold}{c.cyan}📋 Overall Summary:{c.reset}")
-        print(f"{c.dim}{summarized_review}{c.reset}")
-        print("=" * 80)
+    bg_color, icon, label = _severity_display(severity, c)
+
+    # Header with severity badge
+    print(f"{icon} {c.bold}Issue #{index}{c.reset} {bg_color}{c.bold} {label} {c.reset}")
+
+    # File and line info
+    print(f"   {c.cyan}📄 {file_name}{c.reset}{c.gray}:{line_num}{c.reset}")
+
+    # Comment with word wrapping
+    print(f"   {c.magenta}💬 Comment:{c.reset}")
+    _render_comment_block(comment)
+
+    # Code suggestion with syntax highlighting
+    if suggestion:
+        _render_suggestion_block(suggestion, dash_line, c)
+
     print()
+
+
+def _print_overall_summary(summarized_review: str, c: SimpleNamespace) -> None:
+    """Print the overall summary footer."""
+    print("=" * 80)
+    print(f"{c.bold}{c.cyan}📋 Overall Summary:{c.reset}")
+    print(f"{c.dim}{summarized_review}{c.reset}")
+    print("=" * 80)
+
+
+def print_local_review(filtered_items: list, summarized_review: str, min_severity: str):
+    """Print review results in human-readable format for local mode."""
+    c = SimpleNamespace(**{k.lower(): v for k, v in _ANSI.items()})
+    dash_line = "─" * 74
+
+    _print_review_title(c)
+
+    if not filtered_items:
+        print(f"{c.green}{c.bold}✓ No issues found at {min_severity} level or above.{c.reset}\n")
+        if summarized_review:
+            print(f"{c.bold}{c.cyan}Summary:{c.reset}")
+            print(f"{c.dim}{summarized_review}{c.reset}")
+        return
+
+    _print_severity_summary(filtered_items, min_severity, c)
+
+    for i, item in enumerate(filtered_items, 1):
+        _render_item(item, i, dash_line, c)
+
+    if summarized_review:
+        _print_overall_summary(summarized_review, c)
+
+    print()
+
+
+def _resolve_local_diff_source(files: tuple) -> str:
+    """Resolve diff from local staged files or full git diff.
+
+    Exits with code 0 if no changes detected, code 1 on git errors.
+    """
+    if files:
+        logger.info(f"Running in local mode with {len(files)} files")
+        diff = generate_diff_from_files(files)
+        if not diff.strip():
+            logger.info("No changes detected in staged files.")
+            sys.exit(0)
+        return diff
+
+    logger.info("Running in local mode, getting staged files from git")
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--cached"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        diff = result.stdout
+        if not diff.strip():
+            logger.info("No staged changes detected.")
+            sys.exit(0)
+        return diff
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to get git diff: {e}")
+        sys.exit(1)
+
+
+def _resolve_ci_diff_source(diff_file: str | None) -> str:
+    """Read the diff from a CI diff file path.
+
+    Exits with code 1 if no diff_file is provided.
+    """
+    if not diff_file:
+        logger.error("--diff-file is required when not in local mode")
+        sys.exit(1)
+
+    curr_files = [str(p) for p in Path(".").iterdir() if p.is_file()]
+    logger.info(f"Files in curr_dir: {curr_files}")
+    with open(diff_file, encoding="utf-8") as f:
+        return f.read()
+
+
+def _resolve_diff_source(local: bool, files: tuple, diff_file: str | None) -> str:
+    """Resolve the diff content from local staged files or CI diff file."""
+    if local:
+        return _resolve_local_diff_source(files)
+    return _resolve_ci_diff_source(diff_file)
+
+
+def _resolve_ci_env_vars() -> tuple:
+    """Resolve CI-only environment variables and PR comments.
+
+    Returns:
+        Tuple of (github_token, github_repo, pr_number, commit_hash, comments_text).
+    """
+    github_token = os.environ["GITHUB_TOKEN"]
+    github_repo = os.environ["GITHUB_REPOSITORY"]
+    pr_number = int(os.environ["GITHUB_PULL_REQUEST_NUMBER"])
+    commit_hash = os.environ["GIT_COMMIT_HASH"]
+
+    try:
+        comments_text = get_all_pr_comments_text(
+            github_token=github_token,
+            github_repository=github_repo,
+            pull_request_number=pr_number,
+        )
+    except GithubException as exc:
+        logger.warning(f"Failed to fetch PR comments: {exc}")
+        comments_text = ""
+
+    return github_token, github_repo, pr_number, commit_hash, comments_text
+
+
+def _dispatch_local_output(filtered_items: list, summarized_review: str, min_severity: str) -> None:
+    """Print local review output and determine exit code.
+
+    Exits with code 1 if critical issues are found, code 0 otherwise.
+    """
+    print_local_review(filtered_items, summarized_review, min_severity)
+
+    critical_items = [item for item in filtered_items if item.get("severity", "").lower() == "critical"]
+
+    if critical_items:
+        logger.error(f"Found {len(critical_items)} CRITICAL issue(s). Blocking commit.")
+        sys.exit(1)
+
+    logger.info("Review complete. No critical issues found.")
+    sys.exit(0)
+
+
+def _post_single_review_comment(
+    body: str,
+    github_token: str,
+    github_repository: str,
+    pull_request_number: int,
+    git_commit_hash: str,
+) -> None:
+    """Post a single review comment to the PR.
+
+    Raises RuntimeError if the GitHub API returns an error status.
+    """
+    response = create_a_comment_to_pull_request(
+        github_token=github_token,
+        github_repository=github_repository,
+        pull_request_number=pull_request_number,
+        git_commit_hash=git_commit_hash,
+        body=body,
+    )
+    if response.status_code >= 400:
+        logger.error(f"Failed to post PR review comment: HTTP {response.status_code} - {response.text}")
+        raise RuntimeError(f"GitHub API returned {response.status_code} when posting review comment")
+
+
+def _dispatch_ci_output(
+    filtered_items: list,
+    review_comment: str,
+    github_token: str,
+    github_repository: str,
+    pull_request_number: int,
+    git_commit_hash: str,
+) -> None:
+    """Post inline comments or a single PR comment in CI mode.
+
+    Attempts inline comments first; falls back to a single review comment
+    if inline posting fails.
+    """
+    if filtered_items:
+        logger.info(f"Posting {len(filtered_items)} individual inline review comments")
+        results = create_inline_review_comments(
+            github_token=github_token,
+            github_repository=github_repository,
+            pull_request_number=pull_request_number,
+            git_commit_hash=git_commit_hash,
+            review_items=filtered_items,
+        )
+
+        failed = [r for r in results if r.get("status") in ("failed", "error")]
+        if failed:
+            logger.warning(f"{len(failed)} inline comments failed to post. " "Falling back to single review comment.")
+            _post_single_review_comment(
+                body=review_comment,
+                github_token=github_token,
+                github_repository=github_repository,
+                pull_request_number=pull_request_number,
+                git_commit_hash=git_commit_hash,
+            )
+    else:
+        logger.info("No review items found, posting summary only")
+        _post_single_review_comment(
+            body=review_comment,
+            github_token=github_token,
+            github_repository=github_repository,
+            pull_request_number=pull_request_number,
+            git_commit_hash=git_commit_hash,
+        )
 
 
 # pylint: disable=too-many-positional-arguments,broad-exception-caught
@@ -191,9 +375,9 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
 @click.option(
     "--diff-file",
     type=click.STRING,
-    default="/tmp/pr.diff",
+    default=None,
     required=False,
-    help="Pull request diff",
+    help="Pull request diff path (required in CI mode)",
 )
 @click.option(
     "--diff-chunk-size",
@@ -209,12 +393,8 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
     default="gemini-2.5-flash",
     help="Gemini model name (e.g. gemini-2.5-flash, gemini-2.5-pro)",
 )
-@click.option(
-    "--extra-prompt", type=click.STRING, required=False, default="", help="Extra prompt"
-)
-@click.option(
-    "--temperature", type=click.FLOAT, required=False, default=0.1, help="Temperature"
-)
+@click.option("--extra-prompt", type=click.STRING, required=False, default="", help="Extra prompt")
+@click.option("--temperature", type=click.FLOAT, required=False, default=0.1, help="Temperature")
 @click.option("--top-p", type=click.FLOAT, required=False, default=1.0, help="Top N")
 @click.option(
     "--log-level",
@@ -238,7 +418,7 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
 )
 @click.argument("files", nargs=-1, type=click.Path(exists=True))
 def main(
-    diff_file: str,
+    diff_file: str | None,
     diff_chunk_size: int,
     model: str,
     extra_prompt: str,
@@ -249,70 +429,29 @@ def main(
     local: bool,
     files: tuple,
 ):
-    # Set log level
+    """Run the code review CLI — local or CI mode."""
     logger.level(log_level)
 
-    # Set LOCAL environment variable if --local flag is set
     if local:
         os.environ["LOCAL"] = "1"
 
-    # Check if necessary environment variables are set or not
     check_required_env_vars()
 
-    # In local mode, generate diff from staged files
-    if local and files:
-        logger.info(f"Running in local mode with {len(files)} files")
-        # Generate diff for the staged files
-        diff = generate_diff_from_files(files)
-        if not diff.strip():
-            logger.info("No changes detected in staged files.")
-            sys.exit(0)
-    elif local:
-        # No files provided in local mode - get staged files from git
-        logger.info("Running in local mode, getting staged files from git")
-        try:
-            result = subprocess.run(
-                ["git", "diff", "--cached"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            diff = result.stdout
-            if not diff.strip():
-                logger.info("No staged changes detected.")
-                sys.exit(0)
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to get git diff: {e}")
-            sys.exit(1)
-    else:
-        # CI mode - read from diff file
-        if not diff_file:
-            logger.error("--diff-file is required when not in local mode")
-            sys.exit(1)
+    # Resolve diff from the appropriate source
+    diff = _resolve_diff_source(local, files, diff_file)
 
-        print(diff_file)
-        # List the content of the /tmp folder
-        tmp_files = os.popen("ls -lah .").read()
-        logger.info(f"Files in curr_dir: {tmp_files}")
-
-        with open(diff_file, "r", encoding="utf-8") as f:
-            diff = f.read()
-
-    # Set the Gemini API key
+    # Set up Gemini client
     api_key = os.getenv("GEMINI_API_KEY")
     client = genai.Client(api_key=api_key)
 
-    # Fetch PR comments to include as context (skip in local mode or on failure)
+    # Resolve CI-only env vars (only when not in local mode)
     comments_text = ""
+    _github_token = ""
+    _github_repo = ""
+    _pr_number = 0
+    _commit_hash = ""
     if os.getenv("LOCAL") is None:
-        try:
-            comments_text = get_all_pr_comments_text(
-                github_token=os.getenv("GITHUB_TOKEN"),
-                github_repository=os.getenv("GITHUB_REPOSITORY"),
-                pull_request_number=int(os.getenv("GITHUB_PULL_REQUEST_NUMBER")),
-            )
-        except GithubException as exc:
-            logger.warning(f"Failed to fetch PR comments: {exc}")
+        _github_token, _github_repo, _pr_number, _commit_hash, comments_text = _resolve_ci_env_vars()
 
     # Request a code review
     review_conf: AiReviewConfig = {
@@ -348,88 +487,23 @@ def main(
         min_severity=min_severity,
     )
 
-    # Expose outputs to workflows (works for both container actions and composite wrappers).
+    # Expose outputs to workflows
     write_github_output("review_result", review_comment)
-    # Keep this intentionally small to avoid output size limits.
-    write_github_output(
-        "entire_prompt_body", get_review_prompt(extra_prompt=extra_prompt)
-    )
+    write_github_output("entire_prompt_body", get_review_prompt(extra_prompt=extra_prompt))
 
-    # if it is running in a local environment, print human-readable output and exit
+    # Dispatch output based on mode (local vs CI)
     if os.getenv("LOCAL") is not None:
-        print_local_review(filtered_items, summarized_review, min_severity)
+        _dispatch_local_output(filtered_items, summarized_review, min_severity)
+        return  # _dispatch_local_output calls sys.exit, but this keeps the linter happy
 
-        # Exit with non-zero code if critical issues are found
-        critical_items = [
-            item for item in filtered_items
-            if item.get("severity", "").lower() == "critical"
-        ]
-
-        if critical_items:
-            logger.error(f"Found {len(critical_items)} CRITICAL issue(s). Blocking commit.")
-            sys.exit(1)
-
-        logger.info("Review complete. No critical issues found.")
-        sys.exit(0)
-
-    # Post individual inline comments for items with file/line info
-    if filtered_items:
-        logger.info(
-            f"Posting {len(filtered_items)} individual inline review comments"
-        )
-        results = create_inline_review_comments(
-            github_token=os.getenv("GITHUB_TOKEN"),
-            github_repository=os.getenv("GITHUB_REPOSITORY"),
-            pull_request_number=int(os.getenv("GITHUB_PULL_REQUEST_NUMBER")),
-            git_commit_hash=os.getenv("GIT_COMMIT_HASH"),
-            review_items=filtered_items,
-        )
-
-        # Check if any failed (ignore skipped file-level comments)
-        failed = [r for r in results if r.get("status") in ("failed", "error")]
-        if failed:
-            logger.warning(
-                f"{len(failed)} inline comments failed to post. "
-                "Falling back to single review comment."
-            )
-            # Fall back to posting as single review if inline comments fail
-            response = create_a_comment_to_pull_request(
-                github_token=os.getenv("GITHUB_TOKEN"),
-                github_repository=os.getenv("GITHUB_REPOSITORY"),
-                pull_request_number=int(
-                    os.getenv("GITHUB_PULL_REQUEST_NUMBER")
-                ),
-                git_commit_hash=os.getenv("GIT_COMMIT_HASH"),
-                body=review_comment,
-            )
-            if response.status_code >= 400:
-                logger.error(
-                    f"Failed to post PR review comment: HTTP "
-                    f"{response.status_code} - {response.text}"
-                )
-                raise RuntimeError(
-                    f"GitHub API returned {response.status_code} when "
-                    "posting review comment"
-                )
-    else:
-        # No review items, post summary as single comment
-        logger.info("No review items found, posting summary only")
-        response = create_a_comment_to_pull_request(
-            github_token=os.getenv("GITHUB_TOKEN"),
-            github_repository=os.getenv("GITHUB_REPOSITORY"),
-            pull_request_number=int(os.getenv("GITHUB_PULL_REQUEST_NUMBER")),
-            git_commit_hash=os.getenv("GIT_COMMIT_HASH"),
-            body=review_comment,
-        )
-        if response.status_code >= 400:
-            logger.error(
-                f"Failed to post PR review comment: HTTP "
-                f"{response.status_code} - {response.text}"
-            )
-            raise RuntimeError(
-                f"GitHub API returned {response.status_code} when "
-                "posting review comment"
-            )
+    _dispatch_ci_output(
+        filtered_items=filtered_items,
+        review_comment=review_comment,
+        github_token=_github_token,
+        github_repository=_github_repo,
+        pull_request_number=_pr_number,
+        git_commit_hash=_commit_hash,
+    )
 
 
 if __name__ == "__main__":

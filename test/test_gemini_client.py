@@ -17,8 +17,7 @@ import pytest
 from google.genai import errors
 
 from src.config import AiReviewConfig
-from src.gemini_client import (DEFAULT_TOKEN_LIMIT, get_model_context_limit,
-                               get_review)
+from src.gemini_client import DEFAULT_TOKEN_LIMIT, get_model_context_limit, get_review
 from src.quota import _handle_api_error
 
 # ---------------------------------------------------------------------------
@@ -207,8 +206,10 @@ class TestHandleApiError:
         with pytest.raises(errors.APIError):
             _handle_api_error(
                 error,
-                attempt=0, max_attempts=3,
-                initial_wait=1.0, max_wait=10.0,
+                attempt=0,
+                max_attempts=3,
+                initial_wait=1.0,
+                max_wait=10.0,
                 fail_fast_on_no_quota=True,
             )
 
@@ -220,8 +221,10 @@ class TestHandleApiError:
         )
         result = _handle_api_error(
             error,
-            attempt=0, max_attempts=3,
-            initial_wait=0.01, max_wait=0.1,
+            attempt=0,
+            max_attempts=3,
+            initial_wait=0.01,
+            max_wait=0.1,
             fail_fast_on_no_quota=True,
         )
         assert result is True
@@ -236,8 +239,10 @@ class TestHandleApiError:
         # Not last attempt: retry
         result = _handle_api_error(
             error,
-            attempt=0, max_attempts=3,
-            initial_wait=0.01, max_wait=0.1,
+            attempt=0,
+            max_attempts=3,
+            initial_wait=0.01,
+            max_wait=0.1,
             fail_fast_on_no_quota=False,
         )
         assert result is True
@@ -245,8 +250,10 @@ class TestHandleApiError:
         # Last attempt: do not retry
         result = _handle_api_error(
             error,
-            attempt=2, max_attempts=3,
-            initial_wait=0.01, max_wait=0.1,
+            attempt=2,
+            max_attempts=3,
+            initial_wait=0.01,
+            max_wait=0.1,
             fail_fast_on_no_quota=False,
         )
         assert result is False
@@ -259,8 +266,10 @@ class TestHandleApiError:
         )
         result = _handle_api_error(
             error,
-            attempt=0, max_attempts=3,
-            initial_wait=1.0, max_wait=10.0,
+            attempt=0,
+            max_attempts=3,
+            initial_wait=1.0,
+            max_wait=10.0,
             fail_fast_on_no_quota=False,
         )
         assert result is False
@@ -273,8 +282,10 @@ class TestHandleApiError:
         )
         result = _handle_api_error(
             error,
-            attempt=0, max_attempts=3,
-            initial_wait=1.0, max_wait=10.0,
+            attempt=0,
+            max_attempts=3,
+            initial_wait=1.0,
+            max_wait=10.0,
             fail_fast_on_no_quota=False,
         )
         assert result is False
@@ -284,8 +295,10 @@ class TestHandleApiError:
         error = ValueError("not an API error")
         result = _handle_api_error(
             error,
-            attempt=0, max_attempts=3,
-            initial_wait=1.0, max_wait=10.0,
+            attempt=0,
+            max_attempts=3,
+            initial_wait=1.0,
+            max_wait=10.0,
             fail_fast_on_no_quota=False,
         )
         assert result is False

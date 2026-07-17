@@ -17,6 +17,7 @@ from src.utils import CHAR_PER_TOKEN_ESTIMATE, calculate_char_budget
 # calculate_char_budget
 # ---------------------------------------------------------------------------
 
+
 class TestCalculateCharBudget:
     """Test the calculate_char_budget pure function."""
 

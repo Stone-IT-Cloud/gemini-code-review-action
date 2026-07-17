@@ -12,7 +12,7 @@
 """.NET configuration file parser."""
 
 import re
-from typing import Any, Dict
+from typing import Any
 
 from src.context.parsers.base_parser import BaseParser
 
@@ -20,9 +20,9 @@ from src.context.parsers.base_parser import BaseParser
 class DotNetParser(BaseParser):
     """Parser for .csproj/.fsproj/.vbproj files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse .NET project file content."""
-        result = {"type": "dotnet_project"}
+        result: dict[str, Any] = {"type": "dotnet_project"}
 
         # Extract target framework
         framework_match = re.search(r"<TargetFramework>(.*?)</TargetFramework>", content)

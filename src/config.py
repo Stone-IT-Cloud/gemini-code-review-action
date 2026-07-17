@@ -9,11 +9,15 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+"""Application configuration types and validation."""
+
 import os
 from typing import NotRequired, TypedDict
 
 
 class AiReviewConfig(TypedDict):
+    """Configuration for a Gemini AI review request."""
+
     model: str
     diff: str
     extra_prompt: str

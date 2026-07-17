@@ -12,12 +12,12 @@
 """JavaScript/TypeScript configuration file parser."""
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any
 
 from src.context.parsers.base_parser import BaseParser
 
 
-def _parse_json_safe(content: str) -> Optional[Dict[str, Any]]:
+def _parse_json_safe(content: str) -> dict[str, Any] | None:
     """Parse JSON content safely."""
     try:
         return json.loads(content)
@@ -28,7 +28,7 @@ def _parse_json_safe(content: str) -> Optional[Dict[str, Any]]:
 class JavaScriptParser(BaseParser):
     """Parser for package.json files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse package.json content."""
         data = _parse_json_safe(content)
         if not data:

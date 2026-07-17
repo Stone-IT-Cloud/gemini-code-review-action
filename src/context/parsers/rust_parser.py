@@ -12,15 +12,15 @@
 """Rust configuration file parser."""
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 from src.context.parsers.base_parser import BaseParser
 
 
-def _parse_toml_section(content: str, section: str) -> Optional[str]:
+def _parse_toml_section(content: str, section: str) -> str | None:
     """Extract a TOML section from content."""
     try:
-        pattern = rf'\[{re.escape(section)}\](.*?)(?:\n\[|$)'
+        pattern = rf"\[{re.escape(section)}\](.*?)(?:\n\[|$)"
         match = re.search(pattern, content, re.DOTALL)
         if match:
             return match.group(1).strip()
@@ -32,7 +32,7 @@ def _parse_toml_section(content: str, section: str) -> Optional[str]:
 class RustParser(BaseParser):
     """Parser for Cargo.toml files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse Cargo.toml content."""
         result = {"type": "Cargo.toml"}
 

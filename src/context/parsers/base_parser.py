@@ -12,14 +12,14 @@
 """Base parser interface for configuration files."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any
 
 
 class BaseParser(ABC):
     """Abstract base class for configuration file parsers."""
 
     @abstractmethod
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse configuration file content.
 
         Args:

@@ -12,6 +12,22 @@
 import re
 from typing import List, Optional
 
+CHAR_PER_TOKEN_ESTIMATE = 2.0
+
+
+def calculate_char_budget(token_limit: int, overhead_pct: float = 0.2) -> int:
+    """Compute safe character budget from a model token limit.
+
+    Args:
+        token_limit: Model's input_token_limit from genai.get_model().
+        overhead_pct: Fraction reserved for prompt/formatting overhead.
+
+    Returns:
+        Maximum character count that fits within the available token budget.
+    """
+    available_tokens = int(token_limit * (1 - overhead_pct))
+    return int(available_tokens * CHAR_PER_TOKEN_ESTIMATE)
+
 
 def chunk_string(input_string: str, chunk_size: int) -> List[str]:
     """Chunk a string into pieces of at most *chunk_size* characters."""

@@ -20,7 +20,25 @@ from loguru import logger
 from src.config import AiReviewConfig
 from src.prompts import get_review_prompt, get_summarize_prompt
 from src.quota import NoQuotaAvailableError, QuotaTracker, _handle_api_error
-from src.utils import _extract_model_text, _safe_str, chunk_string
+from src.utils import (_extract_model_text, _safe_str, calculate_char_budget,
+                       chunk_string)
+
+DEFAULT_TOKEN_LIMIT = 1_000_000
+
+
+def get_model_context_limit(model_name: str) -> int:
+    """Query the model's input_token_limit via genai.get_model().
+
+    Falls back to DEFAULT_TOKEN_LIMIT (1_000_000) on any failure.
+    """
+    try:
+        model_info = genai.get_model(model_name)
+        limit = getattr(model_info, "input_token_limit", None)
+        if limit is not None and limit > 0:
+            return int(limit)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.warning(f"get_model failed for {model_name}, falling back to {DEFAULT_TOKEN_LIMIT}")
+    return DEFAULT_TOKEN_LIMIT
 
 
 def get_review(config: AiReviewConfig) -> tuple:
@@ -34,10 +52,7 @@ def get_review(config: AiReviewConfig) -> tuple:
     top_p = config.get("top_p", 0.95)
     top_k = config.get("top_k", 0)
     max_output_tokens = config.get("max_output_tokens", 8192)
-    # Chunk the prompt
     review_prompt = get_review_prompt(extra_prompt=extra_prompt)
-    chunked_diff_list = chunk_string(input_string=diff, chunk_size=prompt_chunk_size)
-    logger.info(f"Created {len(chunked_diff_list)} from diff")
     generation_config = {
         "temperature": temperature,
         "top_p": top_p,
@@ -61,6 +76,24 @@ def get_review(config: AiReviewConfig) -> tuple:
         model_name=model,
         generation_config=summarize_generation_config,
     )
+
+    # Budget check: send full diff in a single call if it fits within the model's context.
+    token_limit = get_model_context_limit(model)
+    char_budget = calculate_char_budget(token_limit)
+    if len(diff) <= char_budget:
+        logger.info(
+            f"Diff fits within budget ({len(diff)} <= {char_budget}), "
+            "sending single request"
+        )
+        response = review_model.generate_content(diff)
+        review_text = _extract_model_text(response)
+        if review_text:
+            return ([review_text], review_text)
+        return ([], "")
+
+    # Diff exceeds budget — fall through to chunked processing.
+    chunked_diff_list = chunk_string(input_string=diff, chunk_size=prompt_chunk_size)
+    logger.info(f"Created {len(chunked_diff_list)} chunks from diff")
 
     # Throttling controls (defaults tuned to avoid bursty request patterns in CI).
     max_attempts = int(os.getenv("GEMINI_MAX_ATTEMPTS", "6"))

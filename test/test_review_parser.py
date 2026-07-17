@@ -11,13 +11,18 @@
 #  limitations under the License.
 import json
 
-from src.review_parser import (REVIEW_SYSTEM_PROMPT, _sanitize_suggestion,
-                               _validate_review_item, parse_review_response,
-                               strip_markdown_fences)
+from src.review_parser import (
+    REVIEW_SYSTEM_PROMPT,
+    _sanitize_suggestion,
+    _validate_review_item,
+    parse_review_response,
+    strip_markdown_fences,
+)
 
 # ---------------------------------------------------------------------------
 # strip_markdown_fences
 # ---------------------------------------------------------------------------
+
 
 class TestStripMarkdownFences:
     def test_no_fences(self):
@@ -44,6 +49,7 @@ class TestStripMarkdownFences:
 # ---------------------------------------------------------------------------
 # _sanitize_suggestion
 # ---------------------------------------------------------------------------
+
 
 class TestSanitizeSuggestion:
     """Test suggestion sanitization: prose rejected, diff extracted, code preserved."""
@@ -125,10 +131,7 @@ class TestSanitizeSuggestion:
         assert result is None
 
     def test_prose_after_diff_extraction_rejected(self):
-        raw = (
-            "--- a/x\n+++ b/x\n"
-            "+ Verify that all existing glob patterns are compatible with glob v10."
-        )
+        raw = "--- a/x\n+++ b/x\n" "+ Verify that all existing glob patterns are compatible with glob v10."
         result = _sanitize_suggestion(raw)
         assert result is None
 
@@ -136,6 +139,7 @@ class TestSanitizeSuggestion:
 # ---------------------------------------------------------------------------
 # _validate_review_item
 # ---------------------------------------------------------------------------
+
 
 class TestValidateReviewItem:
     def test_valid_item(self):
@@ -202,6 +206,7 @@ class TestValidateReviewItem:
 # parse_review_response – valid JSON
 # ---------------------------------------------------------------------------
 
+
 class TestParseReviewResponseValidJson:
     def test_single_item_array(self):
         text = json.dumps([{"file": "a.py", "line": 5, "severity": "trivial", "comment": "Looks odd"}])
@@ -223,32 +228,28 @@ class TestParseReviewResponseValidJson:
         assert not result
 
     def test_filters_out_invalid_items(self):
-        text = json.dumps([
-            {"file": "a.py", "line": 1, "severity": "minor", "comment": "Good"},
-            {"invalid": "item"},
-            {"file": "b.py", "line": 2, "severity": "major", "comment": "Also good"},
-        ])
+        text = json.dumps(
+            [
+                {"file": "a.py", "line": 1, "severity": "minor", "comment": "Good"},
+                {"invalid": "item"},
+                {"file": "b.py", "line": 2, "severity": "major", "comment": "Also good"},
+            ]
+        )
         result = parse_review_response(text)
         assert len(result) == 2
 
     def test_object_with_reviews_key(self):
-        text = json.dumps({"reviews": [
-            {"file": "a.py", "line": 1, "severity": "minor", "comment": "ok"}
-        ]})
+        text = json.dumps({"reviews": [{"file": "a.py", "line": 1, "severity": "minor", "comment": "ok"}]})
         result = parse_review_response(text)
         assert len(result) == 1
 
     def test_object_with_comments_key(self):
-        text = json.dumps({"comments": [
-            {"file": "a.py", "line": 1, "severity": "minor", "comment": "ok"}
-        ]})
+        text = json.dumps({"comments": [{"file": "a.py", "line": 1, "severity": "minor", "comment": "ok"}]})
         result = parse_review_response(text)
         assert len(result) == 1
 
     def test_object_with_items_key(self):
-        text = json.dumps({"items": [
-            {"file": "a.py", "line": 1, "severity": "minor", "comment": "ok"}
-        ]})
+        text = json.dumps({"items": [{"file": "a.py", "line": 1, "severity": "minor", "comment": "ok"}]})
         result = parse_review_response(text)
         assert len(result) == 1
 
@@ -261,6 +262,7 @@ class TestParseReviewResponseValidJson:
 # ---------------------------------------------------------------------------
 # parse_review_response – markdown-wrapped JSON
 # ---------------------------------------------------------------------------
+
 
 class TestParseReviewResponseMarkdownWrapped:
     def test_json_fenced(self):
@@ -283,6 +285,7 @@ class TestParseReviewResponseMarkdownWrapped:
 # ---------------------------------------------------------------------------
 # parse_review_response – malformed / edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestParseReviewResponseMalformed:
     def test_none_input(self):
@@ -316,11 +319,13 @@ class TestParseReviewResponseMalformed:
         assert not parse_review_response('["a", "b"]')
 
     def test_mixed_valid_and_non_object(self):
-        text = json.dumps([
-            {"file": "a.py", "line": 1, "severity": "minor", "comment": "ok"},
-            "not an object",
-            42,
-        ])
+        text = json.dumps(
+            [
+                {"file": "a.py", "line": 1, "severity": "minor", "comment": "ok"},
+                "not an object",
+                42,
+            ]
+        )
         result = parse_review_response(text)
         assert len(result) == 1
         assert result[0]["file"] == "a.py"
@@ -329,6 +334,7 @@ class TestParseReviewResponseMalformed:
 # ---------------------------------------------------------------------------
 # REVIEW_SYSTEM_PROMPT
 # ---------------------------------------------------------------------------
+
 
 class TestReviewSystemPrompt:
     def test_contains_json_instruction(self):

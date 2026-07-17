@@ -109,18 +109,14 @@ class TestFormatReviewComment:
     def test_single_chunk_with_valid_json(self):
         items = [{"file": "a.py", "line": 10, "severity": "critical", "comment": "Bug found"}]
         chunk = json.dumps(items)
-        result = format_review_comment(
-            summarized_review="Summary", chunked_reviews=[chunk], min_severity="trivial"
-        )
+        result = format_review_comment(summarized_review="Summary", chunked_reviews=[chunk], min_severity="trivial")
         assert "**[CRITICAL]**" in result
         assert "`a.py:10`" in result
         assert "Bug found" in result
 
     def test_single_chunk_fallback_to_raw_text(self):
         raw = "This is plain text review."
-        result = format_review_comment(
-            summarized_review="Summary", chunked_reviews=[raw], min_severity="trivial"
-        )
+        result = format_review_comment(summarized_review="Summary", chunked_reviews=[raw], min_severity="trivial")
         assert result == raw
 
     def test_multiple_chunks_with_valid_json(self):
@@ -147,24 +143,18 @@ class TestFormatReviewComment:
         assert "plain text 2" in result
 
     def test_empty_chunks_returns_summary(self):
-        result = format_review_comment(
-            summarized_review="Summary", chunked_reviews=[], min_severity="trivial"
-        )
+        result = format_review_comment(summarized_review="Summary", chunked_reviews=[], min_severity="trivial")
         assert result == "Summary"
 
     def test_file_level_comment_no_line(self):
         items = [{"file": "a.py", "line": 0, "severity": "trivial", "comment": "Consider refactoring"}]
         chunk = json.dumps(items)
-        result = format_review_comment(
-            summarized_review="Summary", chunked_reviews=[chunk], min_severity="trivial"
-        )
+        result = format_review_comment(summarized_review="Summary", chunked_reviews=[chunk], min_severity="trivial")
         assert "`a.py`" in result
         assert "a.py:0" not in result
 
     def test_empty_json_array_falls_back_to_summary(self):
-        result = format_review_comment(
-            summarized_review="Summary", chunked_reviews=["[]"], min_severity="trivial"
-        )
+        result = format_review_comment(summarized_review="Summary", chunked_reviews=["[]"], min_severity="trivial")
         assert result == "Summary"
 
     def test_severity_filtering_critical(self):
@@ -175,9 +165,7 @@ class TestFormatReviewComment:
             {"file": "c.py", "line": 3, "severity": "trivial", "comment": "Style issue"},
         ]
         chunk = json.dumps(items)
-        result = format_review_comment(
-            summarized_review="Summary", chunked_reviews=[chunk], min_severity="critical"
-        )
+        result = format_review_comment(summarized_review="Summary", chunked_reviews=[chunk], min_severity="critical")
         assert "**[CRITICAL]**" in result
         assert "**[IMPORTANT]**" not in result
         assert "**[TRIVIAL]**" not in result
@@ -190,9 +178,7 @@ class TestFormatReviewComment:
             {"file": "c.py", "line": 3, "severity": "trivial", "comment": "Style issue"},
         ]
         chunk = json.dumps(items)
-        result = format_review_comment(
-            summarized_review="Summary", chunked_reviews=[chunk], min_severity="important"
-        )
+        result = format_review_comment(summarized_review="Summary", chunked_reviews=[chunk], min_severity="important")
         assert "**[CRITICAL]**" in result
         assert "**[IMPORTANT]**" in result
         assert "**[TRIVIAL]**" not in result
@@ -205,9 +191,7 @@ class TestFormatReviewComment:
             {"file": "c.py", "line": 3, "severity": "trivial", "comment": "Style issue"},
         ]
         chunk = json.dumps(items)
-        result = format_review_comment(
-            summarized_review="Summary", chunked_reviews=[chunk], min_severity="trivial"
-        )
+        result = format_review_comment(summarized_review="Summary", chunked_reviews=[chunk], min_severity="trivial")
         assert "**[CRITICAL]**" in result
         assert "**[IMPORTANT]**" in result
         assert "**[TRIVIAL]**" in result
@@ -219,8 +203,6 @@ class TestFormatReviewComment:
             {"file": "b.py", "line": 2, "severity": "important", "comment": "Logic"},
         ]
         chunk = json.dumps(items)
-        result = format_review_comment(
-            summarized_review="Summary", chunked_reviews=[chunk], min_severity="critical"
-        )
+        result = format_review_comment(summarized_review="Summary", chunked_reviews=[chunk], min_severity="critical")
         # When all items filtered out and single chunk, should return summary
         assert result == "Summary"

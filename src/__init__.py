@@ -1,3 +1,5 @@
+"""Gemini Code Review Action — AI-powered pull request review using Google's Gemini models."""
+
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
 #  You may obtain a copy of the License at

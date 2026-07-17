@@ -12,7 +12,7 @@
 """Terraform configuration file parser."""
 
 import re
-from typing import Any, Dict
+from typing import Any
 
 from src.context.parsers.base_parser import BaseParser
 
@@ -20,9 +20,9 @@ from src.context.parsers.base_parser import BaseParser
 class TerraformParser(BaseParser):
     """Parser for .tf files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse .tf content."""
-        result = {"type": "terraform"}
+        result: dict[str, Any] = {"type": "terraform"}
 
         # Extract required providers
         providers = re.findall(r"required_providers\s*\{([^}]+)\}", content, re.DOTALL)

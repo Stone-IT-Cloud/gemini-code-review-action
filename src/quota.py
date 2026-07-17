@@ -9,12 +9,13 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+"""Quota-aware request throttling with exponential backoff and jitter."""
+
 import os
-import random
+import secrets
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Optional
 
 from google.genai import errors
 from loguru import logger
@@ -44,7 +45,7 @@ def _looks_like_daily_quota_exhausted(message: str) -> bool:
 def _sleep_with_jitter(seconds: float) -> None:
     """Sleep with a small random jitter to avoid synchronized retries."""
     # Jitter in [0, 1.0) seconds, capped so it never dominates the delay.
-    jitter = min(1.0, random.random())
+    jitter = min(1.0, secrets.randbelow(1_000_000_000) / 1_000_000_000.0)
     time.sleep(max(0.0, seconds + jitter))
 
 
@@ -120,13 +121,15 @@ class QuotaTracker:
     last_pruned_at: float = 0.0
     prune_interval_seconds: float = 1.0  # Only prune if this much time has elapsed
 
-    quota_rpm: Optional[int] = None
-    quota_tpm: Optional[int] = None
-    quota_rpd: Optional[int] = None
+    quota_rpm: int | None = None
+    quota_tpm: int | None = None
+    quota_rpd: int | None = None
 
     @staticmethod
     def from_env() -> "QuotaTracker":
-        def _parse_int(name: str) -> Optional[int]:
+        """Create a QuotaTracker from environment variable config."""
+
+        def _parse_int(name: str) -> int | None:
             raw = os.getenv(name)
             if raw is None or raw.strip() == "":
                 return None
@@ -162,20 +165,24 @@ class QuotaTracker:
         self.last_pruned_at = now
 
     def note_request(self, now: float) -> None:
+        """Record a request at the given timestamp."""
         self.requests_total += 1
         self.request_timestamps.append(now)
         self._prune(now)
 
     def note_tokens(self, now: float, total_tokens: int) -> None:
+        """Record token usage at the given timestamp."""
         self.tokens_total += int(total_tokens)
         self.token_events.append((now, int(total_tokens)))
         self._prune(now)
 
     def recent_rpm(self, now: float) -> int:
+        """Return recent requests per minute."""
         self._prune(now)
         return len(self.request_timestamps)
 
     def recent_tpm(self, now: float) -> int:
+        """Return recent tokens per minute."""
         self._prune(now)
         return sum(t for _, t in self.token_events)
 
@@ -205,6 +212,7 @@ class QuotaTracker:
         )
 
     def log_after_response(self, response, label: str) -> None:
+        """Log usage metadata and remaining quota estimate after a response."""
         now = time.time()
         usage = _get_usage_metadata(response)
         total_tokens = usage.get("total_tokens")
@@ -218,16 +226,10 @@ class QuotaTracker:
             output_tokens = usage.get("output_tokens", "?")
             total_tokens_val = usage.get("total_tokens", "?")
             usage_bits.append(
-                "usage_tokens="
-                f"prompt={prompt_tokens},"
-                f"output={output_tokens},"
-                f"total={total_tokens_val}"
+                "usage_tokens=" f"prompt={prompt_tokens}," f"output={output_tokens}," f"total={total_tokens_val}"
             )
         if remaining:
-            usage_bits.append(
-                "run_estimated_remaining="
-                + ",".join(f"{k}={v}" for k, v in remaining.items())
-            )
+            usage_bits.append("run_estimated_remaining=" + ",".join(f"{k}={v}" for k, v in remaining.items()))
         if not usage_bits:
             usage_bits.append("usage_metadata=<not provided by API>")
         joined_usage_bits = ", ".join(usage_bits)

@@ -9,9 +9,10 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+"""Gemini API client — chunked review generation with quota-aware throttling."""
+
 import os
 import time
-from typing import List, Optional
 
 from google.genai import errors, types
 from loguru import logger
@@ -19,10 +20,209 @@ from loguru import logger
 from src.config import AiReviewConfig
 from src.prompts import get_review_prompt, get_summarize_prompt
 from src.quota import NoQuotaAvailableError, QuotaTracker, _handle_api_error
-from src.utils import (_extract_model_text, _safe_str, calculate_char_budget,
-                       chunk_string)
+from src.utils import _extract_model_text, _safe_str, calculate_char_budget, chunk_string
 
 DEFAULT_TOKEN_LIMIT = 1_000_000
+
+
+def _process_chunks(
+    client,
+    model: str,
+    chunked_diff_list: list[str],
+    review_config,
+    temperature,
+    top_p,
+    top_k,
+    max_output_tokens,
+    comments_text: str,
+) -> tuple:
+    """Process diff chunks with retry logic, then summarize if needed."""
+    max_attempts = int(os.getenv("GEMINI_MAX_ATTEMPTS", "6"))
+    initial_wait = float(os.getenv("GEMINI_INITIAL_BACKOFF_SECONDS", "15"))
+    max_wait = float(os.getenv("GEMINI_MAX_BACKOFF_SECONDS", "240"))
+    min_request_interval = float(os.getenv("GEMINI_MIN_REQUEST_INTERVAL_SECONDS", "6"))
+    fail_fast_on_no_quota = os.getenv("GEMINI_FAIL_FAST_ON_NO_QUOTA", "1") == "1"
+
+    tracker = QuotaTracker.from_env()
+    if tracker.has_all_quotas_set_to_zero():
+        raise NoQuotaAvailableError("Configured quota is 0 (GEMINI_QUOTA_RPM/TPM/RPD). Refusing to start.")
+
+    # Get review by chunk (1 request per chunk to reduce RPM/TPM pressure).
+    chunked_reviews = []
+    last_request_at = 0.0
+    for idx, chunked_diff in enumerate(chunked_diff_list, start=1):
+        since_last = time.time() - last_request_at
+        if since_last < min_request_interval:
+            time.sleep(min_request_interval - since_last)
+
+        chunk_result = _process_single_chunk(
+            client,
+            model,
+            idx,
+            len(chunked_diff_list),
+            chunked_diff,
+            review_config,
+            comments_text,
+            max_attempts,
+            initial_wait,
+            max_wait,
+            min_request_interval,
+            fail_fast_on_no_quota,
+            tracker,
+        )
+        if chunk_result is not None:
+            chunked_reviews.append(chunk_result)
+        last_request_at = time.time()
+        time.sleep(min_request_interval)
+
+    if len(chunked_reviews) <= 1:
+        return _single_chunk_result(chunked_reviews)
+
+    return _summarize_chunks(
+        client,
+        model,
+        chunked_reviews,
+        last_request_at,
+        temperature,
+        top_p,
+        top_k,
+        max_output_tokens,
+        max_attempts,
+        initial_wait,
+        max_wait,
+        min_request_interval,
+        fail_fast_on_no_quota,
+        tracker,
+    )
+
+
+def _process_single_chunk(
+    client,
+    model: str,
+    idx: int,
+    total: int,
+    chunked_diff: str,
+    review_config,
+    comments_text: str,
+    max_attempts: int,
+    initial_wait: float,
+    max_wait: float,
+    min_request_interval: float,
+    fail_fast_on_no_quota: bool,
+    tracker,
+) -> str | None:
+    """Process a single diff chunk with retry logic. Returns the review text or None."""
+    for attempt in range(max_attempts):
+        try:
+            prompt_parts: list[str] = [
+                f"[Pull request diff chunk {idx}/{total}]\n{chunked_diff}",
+            ]
+            if comments_text.strip():
+                prompt_parts.append(
+                    "\n\n[Existing PR comments context]\n"
+                    "Take these into consideration when performing your review.\n\n" + comments_text
+                )
+            prompt_parts.append("\n\nNow provide your review according to the earlier instructions.")
+
+            response = client.models.generate_content(
+                model=model,
+                contents="\n".join(prompt_parts),
+                config=review_config,
+            )
+            now = time.time()
+            tracker.note_request(now)
+            review_result = _extract_model_text(response)
+            tracker.log_after_response(response, label=f"Gemini call success (review chunk {idx}/{total})")
+            if review_result:
+                return review_result
+        except errors.APIError as e:
+            logger.error(f"Chunk {idx}/{total} attempt {attempt + 1}/{max_attempts} failed: {_safe_str(e)}")
+            should_retry = _handle_api_error(
+                e,
+                attempt=attempt,
+                max_attempts=max_attempts,
+                initial_wait=initial_wait,
+                max_wait=max_wait,
+                fail_fast_on_no_quota=fail_fast_on_no_quota,
+            )
+            if should_retry:
+                continue
+        logger.error(f"Failed to get model response for chunk {idx}/{total}")
+        return None
+    return None
+
+
+def _single_chunk_result(chunked_reviews: list[str]) -> tuple:
+    """Return result when there's 0 or 1 chunk reviews."""
+    if len(chunked_reviews) == 1:
+        return chunked_reviews, chunked_reviews[0]
+    return (
+        [],
+        "Unable to generate review (Gemini rate limit/quota exceeded). " "Please rerun later or reduce request volume.",
+    )
+
+
+def _summarize_chunks(
+    client,
+    model: str,
+    chunked_reviews: list[str],
+    last_request_at: float,
+    temperature: float,
+    top_p: float,
+    top_k: int,
+    max_output_tokens: int,
+    max_attempts: int,
+    initial_wait: float,
+    max_wait: float,
+    min_request_interval: float,
+    fail_fast_on_no_quota: bool,
+    tracker,
+) -> tuple:
+    """Summarize multiple chunk reviews into a single review."""
+    summarize_prompt = get_summarize_prompt()
+    chunked_reviews_join = "\n".join(chunked_reviews)
+    summarized_review: str | None = None
+
+    for attempt in range(max_attempts):
+        try:
+            since_last = time.time() - last_request_at
+            if since_last < min_request_interval:
+                time.sleep(min_request_interval - since_last)
+
+            summarize_config = types.GenerateContentConfig(
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                max_output_tokens=max_output_tokens,
+            )
+            response = client.models.generate_content(
+                model=model,
+                contents=summarize_prompt + "\n\n" + chunked_reviews_join,
+                config=summarize_config,
+            )
+            now = time.time()
+            tracker.note_request(now)
+            summarized_review = _extract_model_text(response)
+            tracker.log_after_response(response, label="Gemini call success (summary)")
+            if summarized_review:
+                break
+        except errors.APIError as e:
+            logger.error(f"Summary attempt {attempt + 1}/{max_attempts} failed: {_safe_str(e)}")
+            should_retry = _handle_api_error(
+                e,
+                attempt=attempt,
+                max_attempts=max_attempts,
+                initial_wait=initial_wait,
+                max_wait=max_wait,
+                fail_fast_on_no_quota=fail_fast_on_no_quota,
+            )
+            if not should_retry:
+                break
+
+    if not summarized_review:
+        summarized_review = "Unable to generate summary (Gemini API rate limit/quota exceeded)."
+    logger.debug(f"Response AI: {summarized_review}")
+    return chunked_reviews, summarized_review
 
 
 def get_model_context_limit(client, model_name: str) -> int:
@@ -65,10 +265,7 @@ def get_review(client, config: AiReviewConfig) -> tuple:
     token_limit = get_model_context_limit(client, model)
     char_budget = calculate_char_budget(token_limit)
     if len(diff) <= char_budget:
-        logger.info(
-            f"Diff fits within budget ({len(diff)} <= {char_budget}), "
-            "sending single request"
-        )
+        logger.info(f"Diff fits within budget ({len(diff)} <= {char_budget}), " "sending single request")
         response = client.models.generate_content(
             model=model,
             contents=diff,
@@ -83,147 +280,6 @@ def get_review(client, config: AiReviewConfig) -> tuple:
     chunked_diff_list = chunk_string(input_string=diff, chunk_size=prompt_chunk_size)
     logger.info(f"Created {len(chunked_diff_list)} chunks from diff")
 
-    # Throttling controls (defaults tuned to avoid bursty request patterns in CI).
-    max_attempts = int(os.getenv("GEMINI_MAX_ATTEMPTS", "6"))
-    initial_wait = float(os.getenv("GEMINI_INITIAL_BACKOFF_SECONDS", "15"))
-    max_wait = float(os.getenv("GEMINI_MAX_BACKOFF_SECONDS", "240"))
-    min_request_interval = float(os.getenv("GEMINI_MIN_REQUEST_INTERVAL_SECONDS", "6"))
-    fail_fast_on_no_quota = os.getenv("GEMINI_FAIL_FAST_ON_NO_QUOTA", "1") == "1"
-
-    tracker = QuotaTracker.from_env()
-    if tracker.has_all_quotas_set_to_zero():
-        raise NoQuotaAvailableError(
-            "Configured quota is 0 (GEMINI_QUOTA_RPM/TPM/RPD). Refusing to start."
-        )
-
-    # Get review by chunk (1 request per chunk to reduce RPM/TPM pressure).
-    chunked_reviews = []
-    last_request_at = 0.0
-    for idx, chunked_diff in enumerate(chunked_diff_list, start=1):
-        # Enforce a minimum spacing between requests across chunks.
-        since_last = time.time() - last_request_at
-        if since_last < min_request_interval:
-            time.sleep(min_request_interval - since_last)
-
-        for attempt in range(max_attempts):
-            try:
-                prompt_parts: List[str] = [
-                    f"[Pull request diff chunk {idx}/{len(chunked_diff_list)}]\n{chunked_diff}",
-                ]
-
-                # Include PR comments only if present; this can be large, so keep it optional.
-                if comments_text.strip():
-                    prompt_parts.append(
-                        "\n\n[Existing PR comments context]\n"
-                        "Take these into consideration when performing your review.\n\n"
-                        + comments_text
-                    )
-
-                prompt_parts.append(
-                    "\n\nNow provide your review according to the earlier instructions."
-                )
-
-                response = client.models.generate_content(
-                    model=model,
-                    contents="\n".join(prompt_parts),
-                    config=review_config,
-                )
-                now = time.time()
-                tracker.note_request(now)
-                last_request_at = now
-                review_result = _extract_model_text(response)
-                tracker.log_after_response(
-                    response,
-                    label=f"Gemini call success (review chunk {idx}/{len(chunked_diff_list)})",
-                )
-            except errors.APIError as e:
-                logger.error(
-                    f"Chunk {idx}/{len(chunked_diff_list)} attempt {attempt + 1}/{max_attempts} failed: {_safe_str(e)}"
-                )
-                should_retry = _handle_api_error(
-                    e,
-                    attempt=attempt,
-                    max_attempts=max_attempts,
-                    initial_wait=initial_wait,
-                    max_wait=max_wait,
-                    fail_fast_on_no_quota=fail_fast_on_no_quota,
-                )
-                if should_retry:
-                    continue
-                review_result = None
-
-            if not review_result:
-                # Don't crash the whole run; keep going so we can at least attempt other chunks.
-                logger.error(
-                    f"Failed to get model response for chunk {idx}/{len(chunked_diff_list)}"
-                )
-                break
-            logger.debug(f"Response AI: {review_result}")
-            chunked_reviews.append(review_result)
-            break
-        # Additional spacing to avoid bursts across chunks.
-        time.sleep(min_request_interval)
-    # If the chunked reviews are only one, return it
-
-    if len(chunked_reviews) == 1:
-        return chunked_reviews, chunked_reviews[0]
-
-    if len(chunked_reviews) == 0:
-        # Avoid another API call; also avoids guaranteed failure if we're already rate-limited.
-        return (
-            [],
-            (
-                "Unable to generate review (Gemini API rate limit/quota exceeded). "
-                "Please rerun later or reduce request volume."
-            ),
-        )
-
-    summarize_prompt = get_summarize_prompt()
-
-    chunked_reviews_join = "\n".join(chunked_reviews)
-    summarized_review: Optional[str] = None
-    for attempt in range(max_attempts):
-        try:
-            since_last = time.time() - last_request_at
-            if since_last < min_request_interval:
-                time.sleep(min_request_interval - since_last)
-
-            summarize_config = types.GenerateContentConfig(
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                max_output_tokens=max_output_tokens,
-            )
-            response = client.models.generate_content(
-                model=model,
-                contents=summarize_prompt + "\n\n" + chunked_reviews_join,
-                config=summarize_config,
-            )
-            now = time.time()
-            tracker.note_request(now)
-            last_request_at = now
-            summarized_review = _extract_model_text(response)
-            tracker.log_after_response(response, label="Gemini call success (summary)")
-            if summarized_review:
-                break
-        except errors.APIError as e:
-            logger.error(
-                f"Summary attempt {attempt + 1}/{max_attempts} failed: {_safe_str(e)}"
-            )
-            should_retry = _handle_api_error(
-                e,
-                attempt=attempt,
-                max_attempts=max_attempts,
-                initial_wait=initial_wait,
-                max_wait=max_wait,
-                fail_fast_on_no_quota=fail_fast_on_no_quota,
-            )
-            if not should_retry:
-                break
-
-    if not summarized_review:
-        summarized_review = (
-            "Unable to generate summary (Gemini API rate limit/quota exceeded)."
-        )
-    logger.debug(f"Response AI: {summarized_review}")
-    return chunked_reviews, summarized_review
+    return _process_chunks(
+        client, model, chunked_diff_list, review_config, temperature, top_p, top_k, max_output_tokens, comments_text
+    )

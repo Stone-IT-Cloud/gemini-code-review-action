@@ -12,7 +12,7 @@
 """Helm configuration file parser."""
 
 import re
-from typing import Any, Dict
+from typing import Any
 
 from src.context.parsers.base_parser import BaseParser
 
@@ -20,7 +20,7 @@ from src.context.parsers.base_parser import BaseParser
 class HelmParser(BaseParser):
     """Parser for Chart.yaml files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse Chart.yaml content."""
         result = {"type": "Chart.yaml"}
 

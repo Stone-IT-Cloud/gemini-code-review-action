@@ -12,15 +12,15 @@
 """Python configuration file parsers."""
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 from src.context.parsers.base_parser import BaseParser
 
 
-def _parse_toml_section(content: str, section: str) -> Optional[str]:
+def _parse_toml_section(content: str, section: str) -> str | None:
     """Extract a TOML section from content."""
     try:
-        pattern = rf'\[{re.escape(section)}\](.*?)(?:\n\[|$)'
+        pattern = rf"\[{re.escape(section)}\](.*?)(?:\n\[|$)"
         match = re.search(pattern, content, re.DOTALL)
         if match:
             return match.group(1).strip()
@@ -32,23 +32,20 @@ def _parse_toml_section(content: str, section: str) -> Optional[str]:
 class PythonRequirementsParser(BaseParser):
     """Parser for requirements.txt files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse requirements.txt content."""
         if not content.strip():
             return {"type": "requirements.txt", "packages": []}
 
         lines = [line.strip() for line in content.split("\n")]
-        packages = [
-            line for line in lines
-            if line and not line.startswith("#") and not line.startswith("-")
-        ]
+        packages = [line for line in lines if line and not line.startswith("#") and not line.startswith("-")]
         return {"type": "requirements.txt", "packages": packages[:20]}
 
 
 class PythonPipfileParser(BaseParser):
     """Parser for Pipfile files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse Pipfile content."""
         result = {"type": "Pipfile"}
 
@@ -66,9 +63,9 @@ class PythonPipfileParser(BaseParser):
 class PythonPyprojectParser(BaseParser):
     """Parser for pyproject.toml files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse pyproject.toml content."""
-        result = {"type": "pyproject.toml"}
+        result: dict[str, Any] = {"type": "pyproject.toml"}
 
         # Parse Poetry dependencies from [tool.poetry.dependencies]
         poetry_deps = _parse_toml_section(content, "tool.poetry.dependencies")
@@ -81,9 +78,7 @@ class PythonPyprojectParser(BaseParser):
         project_match = re.search(r"\[project\](.*?)(?=\n\[|\Z)", content, re.DOTALL)
         if project_match:
             project_content = project_match.group(1)
-            deps_match = re.search(
-                r"dependencies\s*=\s*\[(.*?)\]", project_content, re.DOTALL
-            )
+            deps_match = re.search(r"dependencies\s*=\s*\[(.*?)\]", project_content, re.DOTALL)
             if deps_match:
                 deps_str = deps_match.group(1)
                 # Parse array items (simple quoted strings)

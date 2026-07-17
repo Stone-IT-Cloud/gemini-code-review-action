@@ -12,7 +12,7 @@
 """Ruby configuration file parser."""
 
 import re
-from typing import Any, Dict
+from typing import Any
 
 from src.context.parsers.base_parser import BaseParser
 
@@ -20,9 +20,9 @@ from src.context.parsers.base_parser import BaseParser
 class RubyParser(BaseParser):
     """Parser for Gemfile files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse Gemfile content."""
-        result = {"type": "Gemfile"}
+        result: dict[str, Any] = {"type": "Gemfile"}
 
         # Look for Rails
         rails_match = re.search(r"gem\s+['\"]rails['\"],?\s+['\"]([^'\"]+)['\"]", content)

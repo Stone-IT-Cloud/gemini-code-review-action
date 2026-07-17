@@ -12,7 +12,7 @@
 """Docker configuration file parsers."""
 
 import re
-from typing import Any, Dict
+from typing import Any
 
 from src.context.parsers.base_parser import BaseParser
 
@@ -20,9 +20,9 @@ from src.context.parsers.base_parser import BaseParser
 class DockerParser(BaseParser):
     """Parser for Dockerfile files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse Dockerfile content."""
-        result = {"type": "Dockerfile"}
+        result: dict[str, Any] = {"type": "Dockerfile"}
 
         # Extract base images
         from_statements = re.findall(r"^FROM\s+(.+?)(?:\s+as\s+.+)?$", content, re.MULTILINE | re.IGNORECASE)
@@ -40,9 +40,9 @@ class DockerParser(BaseParser):
 class DockerComposeParser(BaseParser):
     """Parser for docker-compose.yml files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse docker-compose.yml content."""
-        result = {"type": "docker-compose.yml"}
+        result: dict[str, Any] = {"type": "docker-compose.yml"}
 
         # Extract service names
         services_match = re.search(r"services:(.*?)(?:\n\S|\Z)", content, re.DOTALL)

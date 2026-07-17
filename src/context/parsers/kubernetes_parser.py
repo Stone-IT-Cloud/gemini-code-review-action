@@ -12,7 +12,7 @@
 """Kubernetes configuration file parser."""
 
 import re
-from typing import Any, Dict
+from typing import Any
 
 from src.context.parsers.base_parser import BaseParser
 
@@ -20,14 +20,12 @@ from src.context.parsers.base_parser import BaseParser
 class KubernetesParser(BaseParser):
     """Parser for Kubernetes YAML files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse Kubernetes YAML content."""
-        result = {"type": "kubernetes"}
+        result: dict[str, Any] = {"type": "kubernetes"}
 
         # Extract metadata.name (prefer name inside metadata: block)
-        metadata_block_match = re.search(
-            r"^metadata:\s*\n((?:[ \t].*\n?)*)", content, re.MULTILINE
-        )
+        metadata_block_match = re.search(r"^metadata:\s*\n((?:[ \t].*\n?)*)", content, re.MULTILINE)
         name_match = None
         if metadata_block_match:
             metadata_block = metadata_block_match.group(1)

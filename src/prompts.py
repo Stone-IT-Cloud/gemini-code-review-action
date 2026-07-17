@@ -9,6 +9,8 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+"""Prompt templates for Gemini code review and summarization."""
+
 from src.review_parser import REVIEW_SYSTEM_PROMPT
 
 
@@ -30,7 +32,8 @@ def get_summarize_prompt() -> str:
     """Get a prompt template for summarizing chunked reviews."""
     template = """
     Can you summarize this for me?
-    It would be good to stick to highlighting pressing issues and providing code suggestions to improve the pull request.
+    It would be good to stick to highlighting pressing issues"""
+    template += """ and providing code suggestions to improve the pull request.
     Here's what you need to summarize:
     """
     return template

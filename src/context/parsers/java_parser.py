@@ -12,7 +12,7 @@
 """Java configuration file parsers."""
 
 import re
-from typing import Any, Dict
+from typing import Any
 
 from src.context.parsers.base_parser import BaseParser
 
@@ -20,7 +20,7 @@ from src.context.parsers.base_parser import BaseParser
 class MavenParser(BaseParser):
     """Parser for pom.xml files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse pom.xml content."""
         result = {"type": "pom.xml"}
 
@@ -50,7 +50,7 @@ class MavenParser(BaseParser):
 class GradleParser(BaseParser):
     """Parser for build.gradle files."""
 
-    def parse(self, content: str) -> Dict[str, Any]:
+    def parse(self, content: str) -> dict[str, Any]:
         """Parse build.gradle content."""
         result = {"type": "build.gradle"}
 

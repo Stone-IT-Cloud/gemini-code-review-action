@@ -9,8 +9,9 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+"""Utility functions — text chunking, string processing, and model response helpers."""
+
 import re
-from typing import List, Optional
 
 CHAR_PER_TOKEN_ESTIMATE = 2.0
 
@@ -29,15 +30,15 @@ def calculate_char_budget(token_limit: int, overhead_pct: float = 0.2) -> int:
     return int(available_tokens * CHAR_PER_TOKEN_ESTIMATE)
 
 
-def chunk_string(input_string: str, chunk_size: int) -> List[str]:
+def chunk_string(input_string: str, chunk_size: int) -> list[str]:
     """Chunk a string into pieces of at most *chunk_size* characters."""
     chunked_inputs = []
     for i in range(0, len(input_string), chunk_size):
-        chunked_inputs.append(input_string[i:i + chunk_size])
+        chunked_inputs.append(input_string[i : i + chunk_size])
     return chunked_inputs
 
 
-def _extract_model_text(response) -> Optional[str]:
+def _extract_model_text(response) -> str | None:
     """Best-effort extraction of text from a Gemini SDK response."""
     if response is None:
         return None

@@ -1,0 +1,88 @@
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#          http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
+[tool.black]
+line-length = 120
+target-version = ["py312"]
+skip-string-normalization = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort (replaces isort)
+    "N",    # pep8-naming
+    "D",    # pydocstyle
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+    "S",    # flake8-bandit (lint-tier security)
+    "T20",  # flake8-print
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+]
+ignore = [
+    "D203",  # 1 blank line required before class docstring (incompatible with Google convention)
+    "D213",  # Multi-line docstring summary should start at the second line (incompatible with Google convention)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# T201: Local-mode review output uses print (intentional, not a debug leftover)
+# S101: Assert guards for env vars already validated by check_required_env_vars()
+# S603/S607: git subprocess commands use validated click.Path args (trust boundary clear)
+# S605: os.popen replaced with os.listdir/stat (fix applied, rule kept for any residual usage)
+"src/main.py" = ["T201", "S101", "S603", "S607", "S605"]
+# Test files: pytest idiom uses assert (S101), docstrings optional (D), type annotations not required (ANN),
+# hardcoded tokens for test fixtures (S106), ambiguous unicode in test strings (RUF003)
+"test/**/*.py" = ["D", "S101", "S106", "RUF003"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.mypy]
+python_version = "3.12"
+strict_optional = true
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "requests"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "github",
+    "github.*",
+    "google",
+    "google.*",
+    "loguru",
+]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["test/"]
+# B101: assert statements in tests (ruff S101)
+# B105: empty-string placeholder initializations (_github_token = "") — not actual tokens
+# B404/B603/B607: git subprocess calls use validated args via click.Path (ruff S603/S607)
+skips = ["B101", "B105", "B404", "B603", "B607"]
+
+[tool.xenon]
+max-absolute = "B"
+max-modules = "B"
+max-average = "A"

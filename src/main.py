@@ -15,8 +15,8 @@ import sys
 from types import SimpleNamespace
 
 import click
-import google.generativeai as genai
 from github.GithubException import GithubException
+from google import genai
 from loguru import logger
 
 from src.config import AiReviewConfig, check_required_env_vars
@@ -300,7 +300,7 @@ def main(
 
     # Set the Gemini API key
     api_key = os.getenv("GEMINI_API_KEY")
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 
     # Fetch PR comments to include as context (skip in local mode or on failure)
     comments_text = ""
@@ -324,7 +324,7 @@ def main(
         "prompt_chunk_size": diff_chunk_size,
         "comments_text": comments_text,
     }
-    chunked_reviews, summarized_review = get_review(review_conf)
+    chunked_reviews, summarized_review = get_review(client, review_conf)
     logger.debug(f"Summarized review: {summarized_review}")
     logger.debug(f"Chunked reviews: {chunked_reviews}")
 

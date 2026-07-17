@@ -11,46 +11,51 @@
 #  limitations under the License.
 """Tests for src/gemini_client.py — Gemini API interaction layer."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
+import pytest
+from google.genai import errors
 
 from src.config import AiReviewConfig
 from src.gemini_client import (DEFAULT_TOKEN_LIMIT, get_model_context_limit,
                                get_review)
+from src.quota import _handle_api_error
 
 # ---------------------------------------------------------------------------
 # get_model_context_limit
 # ---------------------------------------------------------------------------
 
+
 class TestGetModelContextLimit:
-    """Test querying model context limits via genai.get_model()."""
+    """Test querying model context limits via client.models.get()."""
 
-    @patch("src.gemini_client.genai")
-    def test_returns_limit_when_available(self, mock_genai):
+    def test_returns_limit_when_available(self):
         """Happy path: model has input_token_limit."""
-        mock_genai.get_model.return_value = MagicMock(input_token_limit=1_048_576)
-        result = get_model_context_limit("gemini-2.5-flash")
+        client = MagicMock()
+        client.models.get.return_value = MagicMock(input_token_limit=1_048_576)
+        result = get_model_context_limit(client, "gemini-2.5-flash")
         assert result == 1_048_576
-        mock_genai.get_model.assert_called_once_with("gemini-2.5-flash")
+        client.models.get.assert_called_once_with(model="gemini-2.5-flash")
 
-    @patch("src.gemini_client.genai")
-    def test_fallback_when_limit_is_none(self, mock_genai):
+    def test_fallback_when_limit_is_none(self):
         """Model exists but input_token_limit is None."""
-        mock_genai.get_model.return_value = MagicMock(input_token_limit=None)
-        result = get_model_context_limit("gemini-2.5-flash")
+        client = MagicMock()
+        client.models.get.return_value = MagicMock(input_token_limit=None)
+        result = get_model_context_limit(client, "gemini-2.5-flash")
         assert result == DEFAULT_TOKEN_LIMIT
 
-    @patch("src.gemini_client.genai")
-    def test_fallback_when_limit_is_zero(self, mock_genai):
+    def test_fallback_when_limit_is_zero(self):
         """Model exists but input_token_limit is 0."""
-        mock_genai.get_model.return_value = MagicMock(input_token_limit=0)
-        result = get_model_context_limit("gemini-2.5-flash")
+        client = MagicMock()
+        client.models.get.return_value = MagicMock(input_token_limit=0)
+        result = get_model_context_limit(client, "gemini-2.5-flash")
         assert result == DEFAULT_TOKEN_LIMIT
 
-    @patch("src.gemini_client.genai")
-    def test_fallback_on_exception(self, mock_genai):
-        """genai.get_model() raises an exception."""
-        mock_genai.get_model.side_effect = Exception("API error")
-        result = get_model_context_limit("gemini-2.5-flash")
+    def test_fallback_on_exception(self):
+        """client.models.get() raises an exception."""
+        client = MagicMock()
+        client.models.get.side_effect = Exception("API error")
+        result = get_model_context_limit(client, "gemini-2.5-flash")
         assert result == DEFAULT_TOKEN_LIMIT
 
     def test_default_token_limit_constant(self):
@@ -73,52 +78,38 @@ _BASIC_CONFIG: AiReviewConfig = {
 }
 
 
-def _make_mock_model(response_text: str) -> MagicMock:
-    """Create a mock GenerativeModel with a configured generate_content."""
-    model = MagicMock()
-    response = MagicMock()
-    response.text = response_text
-    model.generate_content.return_value = response
-    return model
-
-
 class TestGetReviewSingleCall:
     """Tests for the budget-aware single-call path in get_review()."""
 
-    @patch("src.gemini_client.calculate_char_budget")
-    @patch("src.gemini_client.get_model_context_limit")
-    @patch("src.gemini_client.genai")
-    def test_single_call_when_diff_fits_budget(
-        self, mock_genai, mock_context_limit, mock_calc_budget
-    ):
+    def test_single_call_when_diff_fits_budget(self, mocker):
         """Diff fits within budget → single generate_content, no summarization."""
+        mock_context_limit = mocker.patch("src.gemini_client.get_model_context_limit")
+        mock_calc_budget = mocker.patch("src.gemini_client.calculate_char_budget")
         mock_context_limit.return_value = 1_000_000
         mock_calc_budget.return_value = 1_600_000
 
-        mock_model = _make_mock_model('[{"file": "a.py", "line": 1, "severity": "critical", "comment": "Bug"}]')
-        mock_genai.GenerativeModel.return_value = mock_model
+        client = MagicMock()
+        response = MagicMock()
+        response.text = '[{"file": "a.py", "line": 1, "severity": "critical", "comment": "Bug"}]'
+        client.models.generate_content.return_value = response
 
-        chunked, summary = get_review(_BASIC_CONFIG)
+        chunked, summary = get_review(client, _BASIC_CONFIG)
 
         assert len(chunked) == 1
         assert "Bug" in summary
-        mock_model.generate_content.assert_called_once()
+        client.models.generate_content.assert_called_once()
 
-    @patch("src.gemini_client.calculate_char_budget")
-    @patch("src.gemini_client.get_model_context_limit")
-    @patch("src.gemini_client.genai")
-    def test_single_call_returns_empty_on_none_response(
-        self, mock_genai, mock_context_limit, mock_calc_budget
-    ):
+    def test_single_call_returns_empty_on_none_response(self, mocker):
         """When generate_content returns None text, return empty."""
-        mock_context_limit.return_value = 1_000_000
-        mock_calc_budget.return_value = 1_600_000
+        mocker.patch("src.gemini_client.get_model_context_limit", return_value=1_000_000)
+        mocker.patch("src.gemini_client.calculate_char_budget", return_value=1_600_000)
 
-        mock_model = _make_mock_model("")
-        mock_model.generate_content.return_value.text = None  # type: ignore[assignment]
-        mock_genai.GenerativeModel.return_value = mock_model
+        client = MagicMock()
+        response = MagicMock()
+        response.text = None
+        client.models.generate_content.return_value = response
 
-        chunked, summary = get_review(_BASIC_CONFIG)
+        chunked, summary = get_review(client, _BASIC_CONFIG)
 
         assert len(chunked) == 0
         assert summary == ""
@@ -127,99 +118,174 @@ class TestGetReviewSingleCall:
 class TestGetReviewMultiChunk:
     """Tests for the fallback multi-chunk path in get_review()."""
 
-    @patch("src.gemini_client.calculate_char_budget")
-    @patch("src.gemini_client.get_model_context_limit")
-    @patch("src.gemini_client.genai")
-    @patch("src.gemini_client.QuotaTracker")
-    def test_multi_chunk_when_diff_exceeds_budget(
-        self, mock_quota, mock_genai, mock_context_limit, mock_calc_budget
-    ):
+    def test_multi_chunk_when_diff_exceeds_budget(self, mocker):
         """Diff exceeds budget → chunking + summarization."""
-        mock_context_limit.return_value = 1_000_000
-        mock_calc_budget.return_value = 10  # smaller than diff
-
-        # Mock quota to avoid env var reads
+        mocker.patch("src.gemini_client.get_model_context_limit", return_value=1_000_000)
+        mocker.patch("src.gemini_client.calculate_char_budget", return_value=10)
         mock_tracker = MagicMock()
         mock_tracker.has_all_quotas_set_to_zero.return_value = False
-        mock_quota.from_env.return_value = mock_tracker
+        mocker.patch("src.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
 
-        # Mock model responses
-        mock_model = _make_mock_model("review chunk 1 content")
-        mock_summary_model = _make_mock_model("summarized content")
-        mock_genai.GenerativeModel.side_effect = [mock_model, mock_summary_model]
+        client = MagicMock()
+
+        def _generate_content_side_effect(*_args, **_kwargs):
+            resp = MagicMock()
+            resp.text = "review chunk content"
+            return resp
+
+        client.models.generate_content.side_effect = _generate_content_side_effect
 
         config: AiReviewConfig = {
             **_BASIC_CONFIG,
-            "diff": "x" * 100,        # larger than budget of 10
-            "prompt_chunk_size": 60,   # force ≥2 chunks
+            "diff": "x" * 100,
+            "prompt_chunk_size": 60,
         }
 
-        chunked = get_review(config)[0]
+        chunked = get_review(client, config)[0]
 
-        # Should have multiple chunks
         assert len(chunked) >= 2
-        # Summarization model was called (2nd GenerativeModel instance)
-        mock_summary_model.generate_content.assert_called_once()
 
-    @patch("src.gemini_client.calculate_char_budget")
-    @patch("src.gemini_client.get_model_context_limit")
-    @patch("src.gemini_client.genai")
-    @patch("src.gemini_client.QuotaTracker")
-    def test_multi_chunk_single_chunk_skips_summary(
-        self, mock_quota, mock_genai, mock_context_limit, mock_calc_budget
-    ):
-        """When chunking produces only 1 chunk, no summarization call."""
-        mock_context_limit.return_value = 1_000_000
-        mock_calc_budget.return_value = 10
-
+    def test_multi_chunk_single_chunk_skips_summary(self, mocker):
+        """When chunking produces only 1 chunk, no separate summarization call (just returns it)."""
+        mocker.patch("src.gemini_client.get_model_context_limit", return_value=1_000_000)
+        mocker.patch("src.gemini_client.calculate_char_budget", return_value=10)
         mock_tracker = MagicMock()
         mock_tracker.has_all_quotas_set_to_zero.return_value = False
-        mock_quota.from_env.return_value = mock_tracker
+        mocker.patch("src.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
 
-        mock_model = _make_mock_model("only chunk")
-        # Only one model needed (review_model) — no summarize_model
-        mock_genai.GenerativeModel.side_effect = [mock_model, MagicMock()]
+        client = MagicMock()
+        response = MagicMock()
+        response.text = "only chunk"
+        client.models.generate_content.return_value = response
 
-        # Use a diff size that is just over budget but within a single chunk
         config: AiReviewConfig = {
             **_BASIC_CONFIG,
-            "diff": "x" * 15,       # >10 budget
-            "prompt_chunk_size": 100,  # >diff → 1 chunk
+            "diff": "x" * 15,
+            "prompt_chunk_size": 100,
         }
 
-        chunked = get_review(config)[0]
+        chunked = get_review(client, config)[0]
 
         assert len(chunked) == 1
-        # No summarization: summarize_model.generate_content never called
-        # (only generate_content for the single chunk)
 
-    @patch("src.gemini_client.calculate_char_budget")
-    @patch("src.gemini_client.get_model_context_limit")
-    @patch("src.gemini_client.genai")
-    @patch("src.gemini_client.QuotaTracker")
-    def test_fallback_budget_on_get_model_failure(
-        self, mock_quota, mock_genai, mock_context_limit, mock_calc_budget
-    ):
+    def test_fallback_budget_on_get_model_failure(self, mocker):
         """get_model_context_limit falls back to DEFAULT_TOKEN_LIMIT."""
-        # Simulate expensive external call: high budget so diff fits single-call
-        mock_context_limit.return_value = DEFAULT_TOKEN_LIMIT
-        mock_calc_budget.return_value = 100_000
+        mocker.patch("src.gemini_client.get_model_context_limit", return_value=DEFAULT_TOKEN_LIMIT)
+        mocker.patch("src.gemini_client.calculate_char_budget", return_value=100_000)
 
-        mock_tracker = MagicMock()
-        mock_tracker.has_all_quotas_set_to_zero.return_value = False
-        mock_quota.from_env.return_value = mock_tracker
-
-        mock_model = _make_mock_model("fallback review")
-        mock_genai.GenerativeModel.return_value = mock_model
+        client = MagicMock()
+        response = MagicMock()
+        response.text = "fallback review"
+        client.models.generate_content.return_value = response
 
         config: AiReviewConfig = {
             **_BASIC_CONFIG,
             "diff": "small text",
         }
 
-        chunked, summary = get_review(config)
+        chunked, summary = get_review(client, config)
 
         assert len(chunked) == 1
         assert "fallback review" in summary
-        # Single call path used since diff < budget
-        mock_model.generate_content.assert_called_once()
+        client.models.generate_content.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _handle_api_error — new code-based error dispatch
+# ---------------------------------------------------------------------------
+
+
+class TestHandleApiError:
+    """Tests for _handle_api_error with new errors.APIError code-based dispatch."""
+
+    def test_429_with_quota_exhausted_fail_fast_raises(self):
+        """429 + daily quota text + fail_fast → raises."""
+        error = errors.APIError(
+            code=429,
+            response_json={"error": {"message": "requests per day exceeded"}},
+        )
+        with pytest.raises(errors.APIError):
+            _handle_api_error(
+                error,
+                attempt=0, max_attempts=3,
+                initial_wait=1.0, max_wait=10.0,
+                fail_fast_on_no_quota=True,
+            )
+
+    def test_429_without_daily_text_retries(self):
+        """429 without daily quota text → retries with backoff."""
+        error = errors.APIError(
+            code=429,
+            response_json={"error": {"message": "Resource exhausted"}},
+        )
+        result = _handle_api_error(
+            error,
+            attempt=0, max_attempts=3,
+            initial_wait=0.01, max_wait=0.1,
+            fail_fast_on_no_quota=True,
+        )
+        assert result is True
+
+    def test_504_retries_unless_last(self):
+        """504 DeadlineExceeded → retries unless last attempt."""
+        error = errors.APIError(
+            code=504,
+            response_json={"error": {"message": "Deadline exceeded"}},
+        )
+
+        # Not last attempt: retry
+        result = _handle_api_error(
+            error,
+            attempt=0, max_attempts=3,
+            initial_wait=0.01, max_wait=0.1,
+            fail_fast_on_no_quota=False,
+        )
+        assert result is True
+
+        # Last attempt: do not retry
+        result = _handle_api_error(
+            error,
+            attempt=2, max_attempts=3,
+            initial_wait=0.01, max_wait=0.1,
+            fail_fast_on_no_quota=False,
+        )
+        assert result is False
+
+    def test_400_no_retry(self):
+        """400 InvalidArgument → never retry."""
+        error = errors.APIError(
+            code=400,
+            response_json={"error": {"message": "Invalid argument"}},
+        )
+        result = _handle_api_error(
+            error,
+            attempt=0, max_attempts=3,
+            initial_wait=1.0, max_wait=10.0,
+            fail_fast_on_no_quota=False,
+        )
+        assert result is False
+
+    def test_unknown_code_no_retry(self):
+        """Unknown error code → do not retry."""
+        error = errors.APIError(
+            code=500,
+            response_json={"error": {"message": "Something broke"}},
+        )
+        result = _handle_api_error(
+            error,
+            attempt=0, max_attempts=3,
+            initial_wait=1.0, max_wait=10.0,
+            fail_fast_on_no_quota=False,
+        )
+        assert result is False
+
+    def test_non_api_error_no_retry(self):
+        """Non-APIError (e.g. ValueError) → do not retry."""
+        error = ValueError("not an API error")
+        result = _handle_api_error(
+            error,
+            attempt=0, max_attempts=3,
+            initial_wait=1.0, max_wait=10.0,
+            fail_fast_on_no_quota=False,
+        )
+        assert result is False

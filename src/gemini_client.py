@@ -13,8 +13,7 @@ import os
 import time
 from typing import List, Optional
 
-import google.generativeai as genai
-from google.api_core import exceptions as google_exceptions
+from google.genai import errors, types
 from loguru import logger
 
 from src.config import AiReviewConfig
@@ -26,13 +25,13 @@ from src.utils import (_extract_model_text, _safe_str, calculate_char_budget,
 DEFAULT_TOKEN_LIMIT = 1_000_000
 
 
-def get_model_context_limit(model_name: str) -> int:
-    """Query the model's input_token_limit via genai.get_model().
+def get_model_context_limit(client, model_name: str) -> int:
+    """Query the model's input_token_limit via client.models.get().
 
     Falls back to DEFAULT_TOKEN_LIMIT (1_000_000) on any failure.
     """
     try:
-        model_info = genai.get_model(model_name)
+        model_info = client.models.get(model=model_name)
         limit = getattr(model_info, "input_token_limit", None)
         if limit is not None and limit > 0:
             return int(limit)
@@ -41,7 +40,7 @@ def get_model_context_limit(model_name: str) -> int:
     return DEFAULT_TOKEN_LIMIT
 
 
-def get_review(config: AiReviewConfig) -> tuple:
+def get_review(client, config: AiReviewConfig) -> tuple:
     """Get a review from Gemini for the given diff configuration."""
     model = config["model"]
     diff = config["diff"]
@@ -53,39 +52,28 @@ def get_review(config: AiReviewConfig) -> tuple:
     top_k = config.get("top_k", 0)
     max_output_tokens = config.get("max_output_tokens", 8192)
     review_prompt = get_review_prompt(extra_prompt=extra_prompt)
-    generation_config = {
-        "temperature": temperature,
-        "top_p": top_p,
-        "top_k": top_k,
-        "max_output_tokens": max_output_tokens,
-        "response_mime_type": "application/json",
-    }
-    review_model = genai.GenerativeModel(
-        model_name=model,
-        generation_config=generation_config,
+    review_config = types.GenerateContentConfig(
+        temperature=temperature,
+        top_p=top_p,
+        top_k=top_k,
+        max_output_tokens=max_output_tokens,
+        response_mime_type="application/json",
         system_instruction=review_prompt,
-    )
-    # Separate model for summarization (no review system_instruction / no JSON constraint).
-    summarize_generation_config = {
-        "temperature": temperature,
-        "top_p": top_p,
-        "top_k": top_k,
-        "max_output_tokens": max_output_tokens,
-    }
-    summarize_model = genai.GenerativeModel(
-        model_name=model,
-        generation_config=summarize_generation_config,
     )
 
     # Budget check: send full diff in a single call if it fits within the model's context.
-    token_limit = get_model_context_limit(model)
+    token_limit = get_model_context_limit(client, model)
     char_budget = calculate_char_budget(token_limit)
     if len(diff) <= char_budget:
         logger.info(
             f"Diff fits within budget ({len(diff)} <= {char_budget}), "
             "sending single request"
         )
-        response = review_model.generate_content(diff)
+        response = client.models.generate_content(
+            model=model,
+            contents=diff,
+            config=review_config,
+        )
         review_text = _extract_model_text(response)
         if review_text:
             return ([review_text], review_text)
@@ -135,7 +123,11 @@ def get_review(config: AiReviewConfig) -> tuple:
                     "\n\nNow provide your review according to the earlier instructions."
                 )
 
-                response = review_model.generate_content("\n".join(prompt_parts))
+                response = client.models.generate_content(
+                    model=model,
+                    contents="\n".join(prompt_parts),
+                    config=review_config,
+                )
                 now = time.time()
                 tracker.note_request(now)
                 last_request_at = now
@@ -144,13 +136,7 @@ def get_review(config: AiReviewConfig) -> tuple:
                     response,
                     label=f"Gemini call success (review chunk {idx}/{len(chunked_diff_list)})",
                 )
-            except (
-                google_exceptions.ResourceExhausted,
-                google_exceptions.DeadlineExceeded,
-                google_exceptions.InvalidArgument,
-                google_exceptions.GoogleAPICallError,
-                google_exceptions.RetryError,
-            ) as e:
+            except errors.APIError as e:
                 logger.error(
                     f"Chunk {idx}/{len(chunked_diff_list)} attempt {attempt + 1}/{max_attempts} failed: {_safe_str(e)}"
                 )
@@ -202,8 +188,16 @@ def get_review(config: AiReviewConfig) -> tuple:
             if since_last < min_request_interval:
                 time.sleep(min_request_interval - since_last)
 
-            response = summarize_model.generate_content(
-                summarize_prompt + "\n\n" + chunked_reviews_join
+            summarize_config = types.GenerateContentConfig(
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                max_output_tokens=max_output_tokens,
+            )
+            response = client.models.generate_content(
+                model=model,
+                contents=summarize_prompt + "\n\n" + chunked_reviews_join,
+                config=summarize_config,
             )
             now = time.time()
             tracker.note_request(now)
@@ -212,13 +206,7 @@ def get_review(config: AiReviewConfig) -> tuple:
             tracker.log_after_response(response, label="Gemini call success (summary)")
             if summarized_review:
                 break
-        except (
-            google_exceptions.ResourceExhausted,
-            google_exceptions.DeadlineExceeded,
-            google_exceptions.InvalidArgument,
-            google_exceptions.GoogleAPICallError,
-            google_exceptions.RetryError,
-        ) as e:
+        except errors.APIError as e:
             logger.error(
                 f"Summary attempt {attempt + 1}/{max_attempts} failed: {_safe_str(e)}"
             )

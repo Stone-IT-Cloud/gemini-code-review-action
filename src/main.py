@@ -199,7 +199,7 @@ def print_local_review(filtered_items: list, summarized_review: str, min_severit
     "--diff-chunk-size",
     type=click.INT,
     required=False,
-    default=3500,
+    default=500000,
     help="Pull request diff",
 )
 @click.option(

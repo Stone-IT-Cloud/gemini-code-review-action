@@ -19,7 +19,7 @@ def calculate_char_budget(token_limit: int, overhead_pct: float = 0.2) -> int:
     """Compute safe character budget from a model token limit.
 
     Args:
-        token_limit: Model's input_token_limit from genai.get_model().
+        token_limit: Model's input_token_limit from client.models.get().
         overhead_pct: Fraction reserved for prompt/formatting overhead.
 
     Returns:

@@ -16,7 +16,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Optional
 
-from google.api_core import exceptions as google_exceptions
+from google.genai import errors
 from loguru import logger
 
 from src.utils import _get_usage_metadata, _safe_str
@@ -63,9 +63,15 @@ def _handle_api_error(
     """
     is_last_attempt = (attempt + 1) >= max_attempts
 
-    if isinstance(error, google_exceptions.ResourceExhausted):
-        # Rate limit / quota exceeded.
-        err_text = _safe_str(error)
+    if not isinstance(error, errors.APIError):
+        logger.error(f"Unexpected non-API error: {_safe_str(error)}")
+        return False
+
+    code = getattr(error, "code", None)
+    err_text = _safe_str(error)
+
+    # 429 — ResourceExhausted (rate limit / quota exceeded)
+    if code == 429:
         logger.warning(f"Rate limit / quota exceeded details: {err_text}")
 
         if fail_fast_on_no_quota and _looks_like_daily_quota_exhausted(err_text):
@@ -80,16 +86,18 @@ def _handle_api_error(
         _sleep_with_jitter(wait_time)
         return True
 
-    if isinstance(error, google_exceptions.DeadlineExceeded):
+    # 504 — DeadlineExceeded (timeout)
+    if code == 504:
         logger.error("API request timed out")
         return not is_last_attempt
 
-    if isinstance(error, google_exceptions.InvalidArgument):
-        logger.error(f"Invalid API request: {str(error)}")
+    # 400 — InvalidArgument (bad request, do not retry)
+    if code == 400:
+        logger.error(f"Invalid API request: {err_text}")
         return False
 
-    # Default: do not spin forever on unexpected errors.
-    logger.error(f"Unexpected API error: {str(error)}")
+    # Any other APIError — do not retry on unknown codes
+    logger.error(f"Unexpected API error (code={code}): {err_text}")
     return False
 
 

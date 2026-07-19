@@ -85,6 +85,10 @@ inputs:
     description: "Enable cross-PR review memory via Engram (true/false). When enabled, the action stores and retrieves past review decisions to avoid repeating rejected suggestions."
     required: false
     default: "true"
+  mode:
+    description: "Operation mode: 'review' (default, PR code review) or 'learn' (post-PR analysis of human feedback)."
+    required: false
+    default: "review"
   test_results_path:
     description: "Path to a test results file (stdout/stderr from test runner). The action reads this for context-aware reviews."
     required: false
@@ -147,6 +151,7 @@ runs:
         EXTRA_PROMPT: ${{ inputs.extra_prompt }}
         TEMPERATURE: ${{ inputs.temperature }}
         TOP_P: ${{ inputs.top_p }}
+        MODE: ${{ inputs.mode }}
         LOG_LEVEL: ${{ inputs.log_level }}
         REVIEW_LEVEL: ${{ inputs.review_level }}
         REVIEW_MEMORY_PATH: ${{ inputs.review_memory_path }}
@@ -182,6 +187,7 @@ runs:
           "--diff-chunk-size=${PR_DIFF_CHUNK_SIZE}"
           "--diff-file=${DIFF_FILE}" \
           "--log-level=${LOG_LEVEL}" \
+          "--mode=${MODE}" \
           "--review-memory-path=${REVIEW_MEMORY_PATH}"
         )
 
@@ -195,6 +201,7 @@ runs:
           -e GIT_COMMIT_HASH \
           -e REVIEW_LEVEL \
           -e REVIEW_MEMORY_PATH \
+          -e MODE \
           -e LOCAL \
           -e GITHUB_OUTPUT \
           -e ENGRAM_DIR \

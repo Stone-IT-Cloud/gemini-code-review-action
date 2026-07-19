@@ -1,0 +1,45 @@
+name: Learn from PR Discussions
+
+on:
+  pull_request:
+    types: [closed]
+
+concurrency:
+  group: learn-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  learn:
+    name: Analyse and persist human feedback
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore Engram review memory cache
+        id: cache-restore
+        uses: actions/cache@v4
+        with:
+          path: .engram
+          key: review-memory-${{ github.repository }}
+
+      - name: Learn from PR discussions
+        uses: Stone-IT-Cloud/gemini-code-review-action@v1
+        with:
+          mode: learn
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_repository: ${{ github.repository }}
+          github_pull_request_number: ${{ github.event.pull_request.number }}
+          review_memory_path: .engram
+          log_level: INFO
+
+      - name: Save Engram review memory cache
+        uses: actions/cache@v4
+        with:
+          path: .engram
+          key: review-memory-${{ github.repository }}

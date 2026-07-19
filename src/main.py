@@ -453,6 +453,13 @@ def _dispatch_ci_output(
     help="Enable cross-PR review memory via Engram",
 )
 @click.option(
+    "--mode",
+    type=click.Choice(["review", "learn"], case_sensitive=False),
+    required=False,
+    default="review",
+    help="Operation mode: review (default) or learn (post-PR analysis)",
+)
+@click.option(
     "--local",
     is_flag=True,
     default=False,
@@ -470,6 +477,7 @@ def main(
     review_level: str,
     review_memory_path: str | None,
     review_memory_enabled: bool,
+    mode: str,
     local: bool,
     files: tuple,
 ):
@@ -487,6 +495,27 @@ def main(
     # Set up Gemini client
     api_key = os.getenv("GEMINI_API_KEY")
     client = genai.Client(api_key=api_key)
+
+    # ── Learn mode: analyse closed PR discussions ────────────────────
+    if mode == "learn":
+        from src.learner import _parse_pr_number, run as learner_run
+
+        pr_number = _parse_pr_number(None)
+        repo = os.getenv("GITHUB_REPOSITORY", "")
+        engram_dir = (
+            review_memory_path
+            or os.getenv("ENGRAM_DIR", "")
+            or ".engram"
+        )
+        result = learner_run(
+            github_token=os.getenv("GITHUB_TOKEN", ""),
+            repo=repo,
+            pr_number=pr_number,
+            engram_dir=engram_dir,
+            llm_client=None,  # keyword fallback for now
+        )
+        logger.info(f"Learn complete: {result}")
+        return
 
     # Resolve CI-only env vars (only when not in local mode)
     comments_text = ""

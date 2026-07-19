@@ -145,3 +145,26 @@ class TestFormatReviewCommentWithSummary:
         )
         # Without diff param, backward compatible — no summary
         assert "📋 Review:" not in result
+
+    def test_fallback_parses_summarized_review_json(self):
+        """When items fail validation but summarized_review has valid JSON,
+        the fallback in any_parsed branch should parse and format them."""
+        from src.review_formatter import format_review_comment
+        from src.review_parser import _validate_review_item
+
+        # Craft JSON that's valid but items fail validation (empty comment)
+        chunk = '[{"file": "a.py", "line": 1, "severity": "trivial", "comment": ""}]'
+        # Verify items are invalid on their own
+        import json
+        assert _validate_review_item(json.loads(chunk)[0]) is None
+
+        # summarized_review has the same items, but shorter
+        result = format_review_comment(
+            summarized_review='[{"file": "a.py", "line": 1, "severity": "trivial", "comment": "X"}]',
+            chunked_reviews=[chunk],
+            min_severity="trivial",
+        )
+        # Without diff param, no summary header
+        # The fallback should have parsed summarized_review
+        assert "TRIVIAL" in result
+        assert "a.py" in result

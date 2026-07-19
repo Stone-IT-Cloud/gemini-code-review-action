@@ -149,6 +149,9 @@ runs:
         TOP_P: ${{ inputs.top_p }}
         LOG_LEVEL: ${{ inputs.log_level }}
         REVIEW_LEVEL: ${{ inputs.review_level }}
+        REVIEW_MEMORY_PATH: ${{ inputs.review_memory_path }}
+        ENGRAM_DIR: ${{ inputs.review_memory_path }}
+        ENGRAM_ENABLED: ${{ inputs.review_memory_enabled }}
       run: |
         set -euo pipefail
 
@@ -191,6 +194,7 @@ runs:
           -e GITHUB_PULL_REQUEST_NUMBER \
           -e GIT_COMMIT_HASH \
           -e REVIEW_LEVEL \
+          -e REVIEW_MEMORY_PATH \
           -e LOCAL \
           -e GITHUB_OUTPUT \
           -e ENGRAM_DIR \

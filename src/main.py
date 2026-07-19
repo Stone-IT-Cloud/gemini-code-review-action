@@ -555,8 +555,22 @@ def main(
     logger.debug(f"Chunked reviews: {chunked_reviews}")
 
     # Format reviews with severity filtering
-    # Priority: CLI argument > environment variable > default
-    min_severity = review_level or os.getenv("REVIEW_LEVEL", "IMPORTANT")
+    # Priority: CLI argument > environment variable > auto-adjust > default
+    if review_level:
+        min_severity = review_level
+    elif os.getenv("REVIEW_LEVEL"):
+        min_severity = os.getenv("REVIEW_LEVEL")
+    else:
+        # Auto-adjust based on diff size
+        diff_lines = diff.count("\n")
+        if diff_lines < 50:
+            min_severity = "TRIVIAL"
+            logger.info(f"Diff is small ({diff_lines} lines), auto-set review_level=TRIVIAL")
+        elif diff_lines > 500:
+            min_severity = "CRITICAL"
+            logger.info(f"Diff is large ({diff_lines} lines), auto-set review_level=CRITICAL")
+        else:
+            min_severity = "IMPORTANT"
 
     # Parse all review items from chunked responses
     all_review_items = []

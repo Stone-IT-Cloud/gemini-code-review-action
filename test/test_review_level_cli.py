@@ -197,10 +197,11 @@ class TestReviewLevelCLI:
         os.environ["GEMINI_API_KEY"] = "test-key"
         os.environ["LOCAL"] = "1"
 
-        # Create a test diff file using tempfile
+        # Create a test diff file using tempfile (200 lines → medium diff → IMPORTANT)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as f:
             test_diff_file = f.name
-            f.write("diff --git a/test.py b/test.py\n")
+            for i in range(200):
+                f.write(f"diff line {i}\n")
 
         try:
             runner = CliRunner()
@@ -229,6 +230,170 @@ class TestReviewLevelCLI:
             for key in ["GEMINI_API_KEY", "LOCAL"]:
                 if key in os.environ:
                     del os.environ[key]
+
+    @patch("src.main.genai")
+    @patch("src.main.get_review")
+    @patch("src.main.format_review_comment")
+    @patch("src.main.check_required_env_vars")
+    def test_auto_adjust_trivial_for_small_diff(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+        """Auto-adjust to TRIVIAL when diff < 50 lines and no level specified."""
+        mock_get_review.return_value = (
+            ['[{"file": "test.py", "line": 1, "severity": "trivial", "comment": "Style"}]'],
+            "Summary",
+        )
+        mock_format.return_value = "Formatted review"
+
+        os.environ["GEMINI_API_KEY"] = "test-key"
+        os.environ["LOCAL"] = "1"
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as f:
+            test_diff_file = f.name
+            f.write("\n".join(f"diff line {i}" for i in range(10)))
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(main, ["--diff-file", test_diff_file, "--model", "test-model"])
+            assert result.exit_code == 0, f"Command failed: {result.output}"
+            mock_format.assert_called_once()
+            assert mock_format.call_args[1]["min_severity"] == "TRIVIAL"
+        finally:
+            if os.path.exists(test_diff_file):
+                os.remove(test_diff_file)
+            for key in ["GEMINI_API_KEY", "LOCAL", "REVIEW_LEVEL"]:
+                os.environ.pop(key, None)
+
+    @patch("src.main.genai")
+    @patch("src.main.get_review")
+    @patch("src.main.format_review_comment")
+    @patch("src.main.check_required_env_vars")
+    def test_auto_adjust_critical_for_large_diff(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+        """Auto-adjust to CRITICAL when diff > 500 lines and no level specified.
+        CRITICAL level + CRITICAL items causes exit 1 (blocks commit)."""
+        mock_get_review.return_value = (
+            ['[{"file": "test.py", "line": 1, "severity": "critical", "comment": "Security"}]'],
+            "Summary",
+        )
+        mock_format.return_value = "Formatted review"
+
+        os.environ["GEMINI_API_KEY"] = "test-key"
+        os.environ["LOCAL"] = "1"
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as f:
+            test_diff_file = f.name
+            for i in range(600):
+                f.write(f"diff line {i}\n")
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(main, ["--diff-file", test_diff_file, "--model", "test-model"])
+            assert result.exit_code == 1, f"Expected exit 1 (critical), got {result.exit_code}"
+            mock_format.assert_called_once()
+            assert mock_format.call_args[1]["min_severity"] == "CRITICAL"
+        finally:
+            if os.path.exists(test_diff_file):
+                os.remove(test_diff_file)
+            for key in ["GEMINI_API_KEY", "LOCAL", "REVIEW_LEVEL"]:
+                os.environ.pop(key, None)
+
+    @patch("src.main.genai")
+    @patch("src.main.get_review")
+    @patch("src.main.format_review_comment")
+    @patch("src.main.check_required_env_vars")
+    def test_auto_adjust_important_for_medium_diff(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+        """Auto-adjust to IMPORTANT when diff is 50-500 lines and no level specified."""
+        mock_get_review.return_value = (
+            ['[{"file": "test.py", "line": 1, "severity": "important", "comment": "Bug"}]'],
+            "Summary",
+        )
+        mock_format.return_value = "Formatted review"
+
+        os.environ["GEMINI_API_KEY"] = "test-key"
+        os.environ["LOCAL"] = "1"
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as f:
+            test_diff_file = f.name
+            for i in range(200):
+                f.write(f"diff line {i}\n")
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(main, ["--diff-file", test_diff_file, "--model", "test-model"])
+            assert result.exit_code == 0, f"Command failed: {result.output}"
+            mock_format.assert_called_once()
+            assert mock_format.call_args[1]["min_severity"] == "IMPORTANT"
+        finally:
+            if os.path.exists(test_diff_file):
+                os.remove(test_diff_file)
+            for key in ["GEMINI_API_KEY", "LOCAL", "REVIEW_LEVEL"]:
+                os.environ.pop(key, None)
+
+    @patch("src.main.genai")
+    @patch("src.main.get_review")
+    @patch("src.main.format_review_comment")
+    @patch("src.main.check_required_env_vars")
+    def test_auto_adjust_respects_explicit_cli(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+        """CLI --review-level overrides auto-adjust even for small diffs."""
+        mock_get_review.return_value = (
+            ['[{"file": "test.py", "line": 1, "severity": "important", "comment": "Bug"}]'],
+            "Summary",
+        )
+        mock_format.return_value = "Formatted review"
+
+        os.environ["GEMINI_API_KEY"] = "test-key"
+        os.environ["LOCAL"] = "1"
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as f:
+            test_diff_file = f.name
+            f.write("\n".join(f"diff line {i}" for i in range(10)))
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(main, [
+                "--diff-file", test_diff_file,
+                "--review-level", "CRITICAL",
+                "--model", "test-model",
+            ])
+            assert result.exit_code == 0, f"Command failed: {result.output}"
+            mock_format.assert_called_once()
+            assert mock_format.call_args[1]["min_severity"] == "CRITICAL"
+        finally:
+            if os.path.exists(test_diff_file):
+                os.remove(test_diff_file)
+            for key in ["GEMINI_API_KEY", "LOCAL", "REVIEW_LEVEL"]:
+                os.environ.pop(key, None)
+
+    @patch("src.main.genai")
+    @patch("src.main.get_review")
+    @patch("src.main.format_review_comment")
+    @patch("src.main.check_required_env_vars")
+    def test_auto_adjust_respects_explicit_env(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+        """REVIEW_LEVEL env var overrides auto-adjust even for large diffs."""
+        mock_get_review.return_value = (
+            ['[{"file": "test.py", "line": 1, "severity": "trivial", "comment": "Style"}]'],
+            "Summary",
+        )
+        mock_format.return_value = "Formatted review"
+
+        os.environ["GEMINI_API_KEY"] = "test-key"
+        os.environ["LOCAL"] = "1"
+        os.environ["REVIEW_LEVEL"] = "TRIVIAL"
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".diff", delete=False) as f:
+            test_diff_file = f.name
+            for i in range(600):
+                f.write(f"diff line {i}\n")
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(main, ["--diff-file", test_diff_file, "--model", "test-model"])
+            assert result.exit_code == 0, f"Command failed: {result.output}"
+            mock_format.assert_called_once()
+            assert mock_format.call_args[1]["min_severity"] == "TRIVIAL"
+        finally:
+            if os.path.exists(test_diff_file):
+                os.remove(test_diff_file)
+            for key in ["GEMINI_API_KEY", "LOCAL", "REVIEW_LEVEL"]:
+                os.environ.pop(key, None)
 
     def test_invalid_review_level_rejected(self):
         """Test that Click rejects invalid --review-level values."""

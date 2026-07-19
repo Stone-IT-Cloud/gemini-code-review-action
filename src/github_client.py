@@ -121,7 +121,7 @@ def create_inline_review_comments(
                         "error": response.text,
                     }
                 )
-        except (requests.RequestException, OSError) as exc:
+        except Exception as exc:
             # Catch network/HTTP errors so we never fail the entire review
             # due to issues posting a single comment
             fpath, line_no = item.get("file"), item.get("line")

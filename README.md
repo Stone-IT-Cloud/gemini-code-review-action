@@ -53,6 +53,33 @@ env:
 - Reads existing PR comments and reviews using PyGithub and injects them into the AI context so prior feedback is respected.
 - Configurable prompt, model, and chunk size.
 - **Severity-based filtering** to reduce noise from trivial suggestions (see [Severity Filtering](#severity-filtering)).
+- **Cross-PR review memory**: Remembers past review decisions using Engram's native chunk format (``.engram/chunks/*.jsonl.gz``). The ``.engram/`` directory is cached via GitHub Actions cache, so the action won't repeat suggestions that were already rejected in previous PRs. The same cache can be imported locally with ``engram sync --import`` from the cloned repo.
+
+  **Usage with GitHub Actions cache:**
+
+  ```yaml
+  - name: Restore Engram review memory
+    id: engram-cache
+    uses: actions/cache@v4
+    with:
+      path: .engram
+      key: engram-${{ github.repository }}
+
+  - uses: ./
+    name: "Code Review by Gemini AI"
+    with:
+      gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+      review_memory_path: .engram
+      # ... other inputs
+
+  - name: Save Engram review memory
+    if: always() && steps.engram-cache.outputs.cache-hit != 'true'
+    uses: actions/cache@v4
+    with:
+      path: .engram
+      key: engram-${{ github.repository }}
+  ```
 
 As you might know, a model of Gemini has limitation of the maximum number of input tokens.
 So we have to split the diff of a pull request into multiple chunks, if the size of the diff is over the limitation.

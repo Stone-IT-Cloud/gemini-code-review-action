@@ -122,6 +122,15 @@ def _process_single_chunk(
                     "\n\n[Existing PR comments context]\n"
                     "Take these into consideration when performing your review.\n\n" + comments_text
                 )
+            memory_context = review_config.get("review_memory_context", "")
+            if memory_context.strip():
+                prompt_parts.append(memory_context)
+            supp_context = review_config.get("supplemental_context", "")
+            if supp_context.strip():
+                prompt_parts.append(
+                    "\n\n[Supplemental context — test results, coverage, automated analysis]\n"
+                    "Consider these alongside your review:\n\n" + supp_context
+                )
             prompt_parts.append("\n\nNow provide your review according to the earlier instructions.")
 
             response = client.models.generate_content(

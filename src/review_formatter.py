@@ -12,6 +12,7 @@
 """Review formatting helpers — severity filtering and comment rendering."""
 
 import json
+import re
 
 from loguru import logger
 
@@ -92,8 +93,98 @@ def _collect_review_items(chunked_reviews: list[str]) -> tuple[list[dict], bool]
     return all_items, any_parsed
 
 
-def format_review_comment(summarized_review: str, chunked_reviews: list[str], min_severity: str = "trivial") -> str:
-    """Format reviews, parsing structured JSON when possible."""
+# ---------------------------------------------------------------------------
+# Structured review summary
+# ---------------------------------------------------------------------------
+
+SEVERITY_ICONS = {"critical": "🔴", "important": "🟡", "trivial": "🔵"}
+
+
+def _parse_diff_stats(diff: str) -> dict[str, int]:
+    """Parse diff stats from a unified diff string.
+
+    Returns:
+        Dict with ``additions``, ``deletions``, and ``files`` counts.
+    """
+    # Count lines starting with + (but not +++ which is file headers)
+    additions = len(re.findall(r"^\+[^+]", diff, re.MULTILINE))
+    # Count lines starting with - (but not --- which is file headers)
+    deletions = len(re.findall(r"^\-[^-]", diff, re.MULTILINE))
+    files = len(re.findall(r"^\+\+\+ b/", diff, re.MULTILINE))
+    return {"additions": additions, "deletions": deletions, "files": files}
+
+
+def build_review_summary(
+    all_items: list[dict],
+    diff_stats: dict[str, int] | None = None,
+) -> str:
+    """Build a structured summary header for the review.
+
+    Args:
+        all_items: List of review items with ``severity`` and ``comment`` keys.
+        diff_stats: Optional dict with ``additions``, ``deletions``, ``files``.
+
+    Returns:
+        A markdown summary string, empty if there's no data.
+    """
+    if not all_items:
+        if diff_stats:
+            a, d = diff_stats.get("additions", 0), diff_stats.get("deletions", 0)
+            f = diff_stats.get("files", 0)
+            return f"📋 Review: +{a} / -{d} líneas, {f} archivos\n✅ No se encontraron issues."
+        return "✅ No se encontraron issues."
+
+    # Count by severity
+    counts: dict[str, int] = {}
+    short_descriptions: dict[str, list[str]] = {}
+    for item in all_items:
+        sev = item.get("severity", "important").lower()
+        if sev not in counts:
+            counts[sev] = 0
+            short_descriptions[sev] = []
+        counts[sev] += 1
+        comment = (item.get("comment") or "")[:60]
+        if len(short_descriptions[sev]) < 2:  # max 2 short descriptions per severity
+            short_descriptions[sev].append(comment)
+
+    # Build header
+    lines: list[str] = []
+    if diff_stats:
+        a, d = diff_stats.get("additions", 0), diff_stats.get("deletions", 0)
+        f = diff_stats.get("files", 0)
+        lines.append(f"📋 Review: +{a} / -{d} líneas, {f} archivos")
+    else:
+        lines.append("📋 Review")
+
+    for sev in ("critical", "important", "trivial"):
+        if sev in counts:
+            count = counts[sev]
+            icon = SEVERITY_ICONS.get(sev, "•")
+            descs = short_descriptions.get(sev, [])
+            desc_str = f" — {', '.join(descs)}" if descs else ""
+            lines.append(f"{icon} {count} {sev.upper()}{desc_str}")
+
+    return "\n".join(lines)
+
+
+def format_review_comment(
+    summarized_review: str,
+    chunked_reviews: list[str],
+    min_severity: str = "trivial",
+    diff: str | None = None,
+) -> str:
+    """Format reviews, parsing structured JSON when possible.
+
+    Args:
+        summarized_review: Summarized review text.
+        chunked_reviews: List of chunked review texts.
+        min_severity: Minimum severity threshold.
+        diff: Optional full diff string. When provided, a structured summary
+              header is prepended.
+
+    Returns:
+        Formatted review comment string.
+    """
     all_items, any_parsed = _collect_review_items(chunked_reviews)
 
     if all_items and min_severity:
@@ -106,7 +197,25 @@ def format_review_comment(summarized_review: str, chunked_reviews: list[str], mi
     else:
         structured_body = "\n".join(chunked_reviews) if chunked_reviews else ""
 
+    # Build the body (with or without details wrapper)
     if len(chunked_reviews) <= 1:
-        return structured_body or summarized_review
+        body = structured_body or summarized_review
+    else:
+        body = (
+            f"<details>\n"
+            f"    <summary>{summarized_review}</summary>\n"
+            f"    {structured_body}\n"
+            f"    </details>"
+        )
 
-    return f"<details>\n    <summary>{summarized_review}</summary>\n    {structured_body}\n    </details>"
+    # Prepend structured summary if diff stats are available
+    if diff is not None:
+        diff_stats = _parse_diff_stats(diff)
+        summary = build_review_summary(
+            all_items=all_items,
+            diff_stats=diff_stats,
+        )
+        if summary:
+            body = f"{summary}\n\n---\n\n{body}"
+
+    return body

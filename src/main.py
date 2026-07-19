@@ -586,6 +586,7 @@ def main(
         summarized_review=summarized_review,
         chunked_reviews=chunked_reviews,
         min_severity=min_severity,
+        diff=diff,
     )
 
     # Expose outputs to workflows

@@ -168,3 +168,17 @@ class TestFormatReviewCommentWithSummary:
         # The fallback should have parsed summarized_review
         assert "TRIVIAL" in result
         assert "a.py" in result
+
+    def test_clean_message_when_no_issues(self):
+        """When there are no valid items, show a clean message instead of raw JSON."""
+        from src.review_formatter import format_review_comment
+
+        result = format_review_comment(
+            summarized_review='[]',
+            chunked_reviews=['[]'],
+            min_severity="important",
+        )
+        assert "✅" in result
+        assert "no issues found" in result.lower()
+        assert "IMPORTANT" in result
+        assert result.strip().startswith("✅")

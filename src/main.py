@@ -389,7 +389,14 @@ def _dispatch_ci_output(
                 git_commit_hash=git_commit_hash,
             )
     else:
-        logger.info("No issues found at current severity threshold — skipping review comment")
+        logger.info("No review items found, posting summary only")
+        _post_single_review_comment(
+            body=review_comment,
+            github_token=github_token,
+            github_repository=github_repository,
+            pull_request_number=pull_request_number,
+            git_commit_hash=git_commit_hash,
+        )
 
 
 # pylint: disable=too-many-positional-arguments,broad-exception-caught

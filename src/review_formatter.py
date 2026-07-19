@@ -209,6 +209,7 @@ def format_review_comment(
         else:
             structured_body = ""
     else:
+        # Raw text — could be Gemini's summary or actual review text
         structured_body = "\n".join(chunked_reviews) if chunked_reviews else ""
 
     # Build the body (with or without details wrapper)
@@ -231,5 +232,10 @@ def format_review_comment(
         )
         if summary:
             body = f"{summary}\n\n---\n\n{body}"
+
+    # If the body is empty or contains only raw JSON, provide a clean message
+    if not body.strip() or body.strip().startswith("["):
+        level_label = min_severity.upper() if min_severity else "TRIVIAL"
+        body = f"✅ Code review complete — no issues found at **{level_label}** level."
 
     return body

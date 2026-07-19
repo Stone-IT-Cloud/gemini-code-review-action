@@ -512,7 +512,7 @@ def main(
             repo=repo,
             pr_number=pr_number,
             engram_dir=engram_dir,
-            llm_client=client,  # keyword fallback for now
+            llm_client=client,          # LLM-based classification, falls back to keywords on error
         )
         logger.info(f"Learn complete: {result}")
         return

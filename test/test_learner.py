@@ -60,29 +60,32 @@ class TestParsePrNumber:
 class TestFetchBotComments:
     @patch("src.learner.requests.get")
     def test_returns_bot_comments(self, mock_get):
-        mock_get.return_value.json.return_value = [
-            {
-                "id": 1,
-                "user": {"login": "github-actions[bot]"},
-                "body": "**[CRITICAL]** Bug here",
-                "path": "src/main.py",
-                "line": 42,
-            },
-            {
-                "id": 10,
-                "user": {"login": "alecavallo"},
-                "body": "This is fine",
-                "path": "src/main.py",
-                "line": 42,
-                "in_reply_to_id": 1,
-            },
-            {
-                "id": 2,
-                "user": {"login": "human-user"},
-                "body": "Another topic",
-                "path": "src/main.py",
-                "line": 10,
-            },
+        mock_get.return_value.json.side_effect = [
+            [
+                {
+                    "id": 1,
+                    "user": {"login": "github-actions[bot]"},
+                    "body": "**[CRITICAL]** Bug here",
+                    "path": "src/main.py",
+                    "line": 42,
+                },
+                {
+                    "id": 10,
+                    "user": {"login": "alecavallo"},
+                    "body": "This is fine",
+                    "path": "src/main.py",
+                    "line": 42,
+                    "in_reply_to_id": 1,
+                },
+                {
+                    "id": 2,
+                    "user": {"login": "human-user"},
+                    "body": "Another topic",
+                    "path": "src/main.py",
+                    "line": 10,
+                },
+            ],
+            [],  # second page empty → stop
         ]
         mock_get.return_value.status_code = 200
 
@@ -96,20 +99,23 @@ class TestFetchBotComments:
 
     @patch("src.learner.requests.get")
     def test_includes_human_replies(self, mock_get):
-        mock_get.return_value.json.return_value = [
-            {
-                "id": 1,
-                "user": {"login": "github-actions[bot]"},
-                "body": "Use f-strings",
-                "path": "src/main.py",
-                "line": 5,
-            },
-            {
-                "id": 10,
-                "user": {"login": "alecavallo"},
-                "body": "No aplica, usamos formato legacy",
-                "in_reply_to_id": 1,
-            },
+        mock_get.return_value.json.side_effect = [
+            [
+                {
+                    "id": 1,
+                    "user": {"login": "github-actions[bot]"},
+                    "body": "Use f-strings",
+                    "path": "src/main.py",
+                    "line": 5,
+                },
+                {
+                    "id": 10,
+                    "user": {"login": "alecavallo"},
+                    "body": "No aplica, usamos formato legacy",
+                    "in_reply_to_id": 1,
+                },
+            ],
+            [],  # second page empty → stop
         ]
         mock_get.return_value.status_code = 200
 
@@ -202,3 +208,83 @@ class TestRun:
                 llm_client=None,
             )
             assert result["stored"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Pagination
+# ---------------------------------------------------------------------------
+
+
+class TestFetchBotCommentsPagination:
+    @patch("src.learner.requests.get")
+    def test_fetches_multiple_pages(self, mock_get):
+        """Returns 150 comments across 2 pages, expects both pages fetched."""
+        page1 = [{"id": i, "user": {"login": "github-actions[bot]"}, "body": f"Suggestion {i}"} for i in range(100)]
+        page2 = [{"id": i + 100, "user": {"login": "github-actions[bot]"}, "body": f"Suggestion {i}"} for i in range(50)]
+
+        # First call returns page1, second returns page2, third returns empty
+        mock_get.return_value.json.side_effect = [page1, page2, []]
+        mock_get.return_value.status_code = 200
+
+        comments = _fetch_bot_comments(
+            github_token="test", repo="owner/repo", pr_number=1
+        )
+        # Without replies, comments without replies are filtered out → empty
+        assert isinstance(comments, list)
+        # Verify the function fetched all pages (3rd is empty → stop)
+        assert mock_get.call_count == 3, f"Expected 3 calls, got {mock_get.call_count}"
+
+    @patch("src.learner.requests.get")
+    def test_fetches_until_empty_page(self, mock_get):
+        """Stops fetching when an empty page is returned."""
+        mock_get.return_value.json.side_effect = [
+            [{"id": 1, "user": {"login": "github-actions[bot]"}, "body": "X"}],
+            [],  # empty page → stop
+        ]
+        mock_get.return_value.status_code = 200
+
+        _fetch_bot_comments(github_token="test", repo="owner/repo", pr_number=1)
+        assert mock_get.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# LLM classification
+# ---------------------------------------------------------------------------
+
+
+class TestClassifyDecisionWithLLM:
+    def test_llm_returns_classification(self):
+        """When llm_client responds correctly, use its result."""
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value.text = "rejected"
+
+        result = _classify_decision(
+            "Use f-strings",
+            "No aplica",
+            llm_client=mock_client,
+        )
+        assert result == "rejected"
+
+    def test_llm_fallback_on_invalid_response(self):
+        """If LLM returns unexpected text, fall back to keywords."""
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value.text = "maybe"
+
+        result = _classify_decision(
+            "Use f-strings",
+            "No aplica",
+            llm_client=mock_client,
+        )
+        assert result == "rejected"  # fallback: "no aplica" → rejected
+
+    def test_llm_fallback_on_error(self):
+        """If LLM raises, fall back to keywords."""
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = RuntimeError("API error")
+
+        result = _classify_decision(
+            "Use f-strings",
+            "No aplica",
+            llm_client=mock_client,
+        )
+        assert result == "rejected"

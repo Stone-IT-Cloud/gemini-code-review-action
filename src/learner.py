@@ -149,10 +149,21 @@ def _fetch_bot_comments(
     }
     url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/comments"
 
-    response = requests.get(url, headers=headers, timeout=30)
-    response.raise_for_status()
-
-    all_comments = response.json()
+    # Handle pagination — GitHub returns 30 per page by default (max 100)
+    all_comments: list[dict] = []
+    page = 1
+    per_page = 100
+    while True:
+        response = requests.get(
+            url, headers=headers, timeout=30,
+            params={"per_page": per_page, "page": page},
+        )
+        response.raise_for_status()
+        page_data = response.json()
+        if not page_data:
+            break
+        all_comments.extend(page_data)
+        page += 1
 
     # Build a lookup of parent→child replies
     replies_by_parent: dict[int, list[dict]] = {}
@@ -228,14 +239,47 @@ def _classify_keywords(reply: str) -> str:
     return "acknowledged"
 
 
+_CLASSIFY_PROMPT = """\
+You are a classification assistant. Analyze the following code review
+discussion and determine if the human accepted or rejected the bot's
+suggestion, or simply acknowledged it without action.
+
+Bot suggestion: "{suggestion}"
+Human reply: "{reply}"
+
+Respond with exactly ONE word: rejected, accepted, or acknowledged."""
+
+
 def _classify_with_llm(
     suggestion: str,
     reply: str,
     llm_client: Any,
 ) -> str:
-    """Classify using an LLM."""
-    # This is a placeholder for future LLM-based classification
-    return _classify_keywords(reply)
+    """Classify using an LLM (Gemini).
+
+    Sends a single prompt (~100 tokens) to Gemini for classification.
+    Falls back to keyword matching on error or unexpected response.
+    """
+    try:
+        prompt = _CLASSIFY_PROMPT.format(
+            suggestion=suggestion[:500],
+            reply=reply[:500],
+        )
+    except (KeyError, ValueError):
+        # Handle potential format issues
+        return _classify_keywords(reply)
+
+    try:
+        response = llm_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+        result = response.text.strip().lower()
+        if result not in ("rejected", "accepted", "acknowledged"):
+            return _classify_keywords(reply)
+        return result
+    except Exception:  # pylint: disable=broad-exception-caught
+        return _classify_keywords(reply)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────

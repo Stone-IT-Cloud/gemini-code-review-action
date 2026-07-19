@@ -158,7 +158,14 @@ def _format_issue_comment(comment: object) -> str:
 
 
 def _format_review_comment(rc: object) -> str:
-    """Format a single inline review comment into a summary line."""
+    """Format a single inline review comment into a summary line.
+
+    Skips outdated comments (comments on code that has since changed).
+    """
+    # Skip outdated comments — code has changed since the comment was made
+    if getattr(rc, "outdated", False):
+        return ""
+
     author = getattr(getattr(rc, "user", None), "login", "unknown")
     created = getattr(rc, "created_at", "")
     path = getattr(rc, "path", "")

@@ -365,7 +365,8 @@ def _dispatch_ci_output(
     """Post inline comments or a single PR comment in CI mode.
 
     Attempts inline comments first; falls back to a single review comment
-    if inline posting fails.
+    if inline posting fails.  If there are no actionable items and the
+    comment is purely informational, skips posting entirely.
     """
     if filtered_items:
         logger.info(f"Posting {len(filtered_items)} individual inline review comments")
@@ -379,7 +380,7 @@ def _dispatch_ci_output(
 
         failed = [r for r in results if r.get("status") in ("failed", "error")]
         if failed:
-            logger.warning(f"{len(failed)} inline comments failed to post. " "Falling back to single review comment.")
+            logger.warning(f"{len(failed)} inline comments failed to post. Falling back to single review comment.")
             _post_single_review_comment(
                 body=review_comment,
                 github_token=github_token,
@@ -388,14 +389,7 @@ def _dispatch_ci_output(
                 git_commit_hash=git_commit_hash,
             )
     else:
-        logger.info("No review items found, posting summary only")
-        _post_single_review_comment(
-            body=review_comment,
-            github_token=github_token,
-            github_repository=github_repository,
-            pull_request_number=pull_request_number,
-            git_commit_hash=git_commit_hash,
-        )
+        logger.info("No issues found at current severity threshold — skipping review comment")
 
 
 # pylint: disable=too-many-positional-arguments,broad-exception-caught

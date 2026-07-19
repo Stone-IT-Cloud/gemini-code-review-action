@@ -1,0 +1,63 @@
+name: PR Code Review
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      PR_DIFF_PATH: /tmp/pr.diff
+      GEMINI_MODEL: gemini-2.5-flash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate PR diff
+        id: diff
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch origin "${{ github.event.pull_request.head.ref }}"
+          git fetch origin "${{ github.event.pull_request.base.ref }}"
+          git diff "origin/${{ github.event.pull_request.base.ref }}" > "${{ env.PR_DIFF_PATH }}"
+          echo "Diff generated: $(wc -l < ${{ env.PR_DIFF_PATH }}) lines"
+
+      - name: Restore Engram review memory cache
+        id: cache-restore
+        uses: actions/cache@v4
+        with:
+          path: .engram
+          key: review-memory-${{ github.repository }}
+
+      - name: Code Review by Gemini AI
+        uses: ./
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_repository: ${{ github.repository }}
+          github_pull_request_number: ${{ github.event.pull_request.number }}
+          git_commit_hash: ${{ github.event.pull_request.head.sha }}
+          model: ${{ env.GEMINI_MODEL }}
+          pull_request_diff_file: ${{ env.PR_DIFF_PATH }}
+          review_memory_path: .engram
+          review_memory_enabled: true
+          extra_prompt: |
+            Review this PR as an experienced developer.
+            Focus on correctness, security, and maintainability.
+            Write your review in English.
+          log_level: INFO
+
+      - name: Save Engram review memory cache
+        uses: actions/cache@v4
+        with:
+          path: .engram
+          key: review-memory-${{ github.repository }}

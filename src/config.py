@@ -27,6 +27,8 @@ class AiReviewConfig(TypedDict):
     top_p: NotRequired[float]
     top_k: NotRequired[int]
     max_output_tokens: NotRequired[int]
+    review_memory_context: NotRequired[str]
+    supplemental_context: NotRequired[str]
 
 
 def check_required_env_vars():

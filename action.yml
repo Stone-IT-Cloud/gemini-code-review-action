@@ -77,6 +77,26 @@ inputs:
     description: "Minimum severity level to comment on PR (TRIVIAL, IMPORTANT, CRITICAL)"
     required: false
     default: "IMPORTANT"
+  review_memory_path:
+    description: "Path to the .engram directory (cached by actions/cache). The action reads Engram chunk files to avoid repeating past rejected suggestions."
+    required: false
+    default: ".engram"
+  review_memory_enabled:
+    description: "Enable cross-PR review memory via Engram (true/false). When enabled, the action stores and retrieves past review decisions to avoid repeating rejected suggestions."
+    required: false
+    default: "true"
+  test_results_path:
+    description: "Path to a test results file (stdout/stderr from test runner). The action reads this for context-aware reviews."
+    required: false
+    default: ""
+  coverage_report_path:
+    description: "Path to a code coverage report (e.g. lcov, cobertura XML, or plain text summary). The action considers coverage changes when prioritising issues."
+    required: false
+    default: ""
+  bugbot_results_path:
+    description: "Path to Bugbot or other automated analysis output. The action will not duplicate issues already caught by automation."
+    required: false
+    default: ""
 
 outputs:
   entire_prompt_body:
@@ -157,8 +177,9 @@ runs:
           "--temperature=${TEMPERATURE}"
           "--top-p=${TOP_P}"
           "--diff-chunk-size=${PR_DIFF_CHUNK_SIZE}"
-          "--diff-file=${DIFF_FILE}"
-          "--log-level=${LOG_LEVEL}"
+          "--diff-file=${DIFF_FILE}" \
+          "--log-level=${LOG_LEVEL}" \
+          "--review-memory-path=${REVIEW_MEMORY_PATH}"
         )
 
         docker run --rm \
@@ -172,5 +193,10 @@ runs:
           -e REVIEW_LEVEL \
           -e LOCAL \
           -e GITHUB_OUTPUT \
+          -e ENGRAM_DIR \
+          -e ENGRAM_ENABLED \
+          -e TEST_RESULTS_PATH \
+          -e COVERAGE_REPORT_PATH \
+          -e BUGBOT_RESULTS_PATH \
           "$ACTION_IMAGE_TAG" \
           "${ARGS[@]}"

@@ -263,16 +263,21 @@ def _resolve_diff_source(local: bool, files: tuple, diff_file: str | None) -> st
 
 
 def _resolve_ci_env_vars() -> tuple:
-    """Resolve CI-only environment variables and PR comments.
+    """Resolve CI-only environment variables and PR context.
+
+    Collects PR comments, reviews, and optional supplemental reports
+    (test results, coverage, bugbot) for richer review context.
 
     Returns:
-        Tuple of (github_token, github_repo, pr_number, commit_hash, comments_text).
+        Tuple of (github_token, github_repo, pr_number, commit_hash,
+                  comments_text, supplemental_context).
     """
     github_token = os.environ["GITHUB_TOKEN"]
     github_repo = os.environ["GITHUB_REPOSITORY"]
     pr_number = int(os.environ["GITHUB_PULL_REQUEST_NUMBER"])
     commit_hash = os.environ["GIT_COMMIT_HASH"]
 
+    # ── PR discussion context ────────────────────────────────────────
     try:
         comments_text = get_all_pr_comments_text(
             github_token=github_token,
@@ -283,7 +288,30 @@ def _resolve_ci_env_vars() -> tuple:
         logger.warning(f"Failed to fetch PR comments: {exc}")
         comments_text = ""
 
-    return github_token, github_repo, pr_number, commit_hash, comments_text
+    # ── Supplemental context (test results, coverage, bugbot, etc.) ──
+    supplemental_parts: list[str] = []
+    _read_supplemental_file("TEST_RESULTS_PATH", "Test results", supplemental_parts)
+    _read_supplemental_file("COVERAGE_REPORT_PATH", "Coverage report", supplemental_parts)
+    _read_supplemental_file("BUGBOT_RESULTS_PATH", "Bugbot analysis", supplemental_parts)
+
+    supplemental_context = "\n\n".join(supplemental_parts) if supplemental_parts else ""
+
+    return github_token, github_repo, pr_number, commit_hash, comments_text, supplemental_context
+
+
+def _read_supplemental_file(env_var: str, label: str, parts: list[str]) -> None:
+    """Read a supplemental context file and append it to *parts*."""
+    path = os.getenv(env_var, "")
+    if not path:
+        return
+    try:
+        with open(path, encoding="utf-8") as f:
+            content = f.read().strip()
+        if content:
+            parts.append(f"[{label}]\n{content[:2000]}")
+            logger.info(f"Loaded {label} ({len(content)} chars)")
+    except OSError as exc:
+        logger.warning(f"Failed to read {label} from {path}: {exc}")
 
 
 def _dispatch_local_output(filtered_items: list, summarized_review: str, min_severity: str) -> None:
@@ -411,6 +439,20 @@ def _dispatch_ci_output(
     help="Minimum severity level to comment on",
 )
 @click.option(
+    "--review-memory-path",
+    type=click.STRING,
+    required=False,
+    default=None,
+    help="Path to cross-PR review memory JSON file (Engram export format)",
+)
+@click.option(
+    "--review-memory-enabled",
+    type=click.BOOL,
+    required=False,
+    default=True,
+    help="Enable cross-PR review memory via Engram",
+)
+@click.option(
     "--local",
     is_flag=True,
     default=False,
@@ -426,6 +468,8 @@ def main(
     top_p: float,
     log_level: str,
     review_level: str,
+    review_memory_path: str | None,
+    review_memory_enabled: bool,
     local: bool,
     files: tuple,
 ):
@@ -450,8 +494,49 @@ def main(
     _github_repo = ""
     _pr_number = 0
     _commit_hash = ""
+    review_memory_context = ""
+    supplemental_context = ""
+    engram_enabled = review_memory_enabled and (
+        os.getenv("ENGRAM_ENABLED", "true").lower() not in ("false", "0", "no")
+    )
+    engram_dir = review_memory_path or os.getenv("ENGRAM_DIR", "")
     if os.getenv("LOCAL") is None:
-        _github_token, _github_repo, _pr_number, _commit_hash, comments_text = _resolve_ci_env_vars()
+        _github_token, _github_repo, _pr_number, _commit_hash, comments_text, supplemental_context = (
+            _resolve_ci_env_vars()
+        )
+
+        # ── Cross-PR review memory via Engram ────────────────────────
+        # REVIEW_MEMORY_PATH points to the .engram/ dir (cached by GHA).
+        # The action reads/writes the SQLite DB using Python stdlib only.
+        if engram_enabled and engram_dir:
+            try:
+                from src.review_memory import (
+                    build_context,
+                    ensure_engram,
+                    load_decisions,
+                    observation_count,
+                    query_similar,
+                )
+
+                ensure_engram(engram_dir)
+                count_before = observation_count(engram_dir, _github_repo)
+                if count_before > 0:
+                    # Token-minimised: load recent + query similar via FTS
+                    decisions = load_decisions(engram_dir, _github_repo, limit=30)
+                    # If the diff has a suggestion text, search for similar past ones
+                    similar = query_similar(
+                        engram_dir, _github_repo, diff[:500], max_results=3
+                    ) if diff else []
+                    review_memory_context = build_context(decisions, similar)
+                    if review_memory_context:
+                        logger.info(
+                            f"Loaded {count_before} past decisions "
+                            f"({len(similar)} similar via FTS) "
+                            f"from Engram at {engram_dir}"
+                        )
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.warning(f"Engram review memory unavailable: {exc}")
+                review_memory_context = ""
 
     # Request a code review
     review_conf: AiReviewConfig = {
@@ -462,6 +547,8 @@ def main(
         "top_p": top_p,
         "prompt_chunk_size": diff_chunk_size,
         "comments_text": comments_text,
+        "supplemental_context": supplemental_context,
+        "review_memory_context": review_memory_context,
     }
     chunked_reviews, summarized_review = get_review(client, review_conf)
     logger.debug(f"Summarized review: {summarized_review}")
@@ -504,6 +591,30 @@ def main(
         pull_request_number=_pr_number,
         git_commit_hash=_commit_hash,
     )
+
+    # ── Store review suggestions as pending decisions in Engram ─────
+    # Each suggestion generated gets stored so future PRs can check
+    # whether similar feedback was already discussed.
+    if engram_enabled and engram_dir and filtered_items:
+        try:
+            from src.review_memory import store_decisions_batch
+
+            pending = [
+                {
+                    "suggestion": item.get("comment", ""),
+                    "file_pattern": item.get("file", "*"),
+                    "decision": "suggested",
+                    "reason": "",
+                }
+                for item in filtered_items
+            ]
+            if pending:
+                stored = store_decisions_batch(
+                    engram_dir, _github_repo, _pr_number, pending
+                )
+                logger.info(f"Stored {stored} suggested decisions in Engram")
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.warning(f"Failed to store decisions in Engram: {exc}")
 
 
 if __name__ == "__main__":

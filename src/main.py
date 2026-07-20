@@ -284,7 +284,7 @@ def _resolve_ci_env_vars() -> tuple:
             github_repository=github_repo,
             pull_request_number=pr_number,
         )
-    except GithubException as exc:
+    except (GithubException, Exception) as exc:
         logger.warning(f"Failed to fetch PR comments: {exc}")
         comments_text = ""
 

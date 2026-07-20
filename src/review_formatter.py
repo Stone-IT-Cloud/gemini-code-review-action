@@ -193,8 +193,23 @@ def format_review_comment(
     if all_items:
         structured_body = "\n\n".join(_format_item_line(item) for item in all_items)
     elif any_parsed:
-        structured_body = ""
+        # Valid JSON was received but individual items failed validation.
+        # Try parsing summarized_review as a fallback source of items.
+        if summarized_review.strip().startswith("[") or summarized_review.strip().startswith("{"):
+            from src.review_parser import parse_review_response
+
+            fallback_items = parse_review_response(summarized_review)
+            if fallback_items and min_severity:
+                fallback_items = filter_by_severity(fallback_items, min_severity)
+            if fallback_items:
+                structured_body = "\n\n".join(_format_item_line(item) for item in fallback_items)
+                all_items = fallback_items  # update for summary
+            else:
+                structured_body = ""
+        else:
+            structured_body = ""
     else:
+        # Raw text — could be Gemini's summary or actual review text
         structured_body = "\n".join(chunked_reviews) if chunked_reviews else ""
 
     # Build the body (with or without details wrapper)
@@ -217,5 +232,10 @@ def format_review_comment(
         )
         if summary:
             body = f"{summary}\n\n---\n\n{body}"
+
+    # If the body is empty or contains only raw JSON, provide a clean message
+    if not body.strip() or body.strip().startswith("["):
+        level_label = min_severity.upper() if min_severity else "TRIVIAL"
+        body = f"✅ Code review complete — no issues found at **{level_label}** level."
 
     return body

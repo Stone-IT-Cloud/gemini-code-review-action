@@ -284,7 +284,7 @@ def _resolve_ci_env_vars() -> tuple:
             github_repository=github_repo,
             pull_request_number=pr_number,
         )
-    except GithubException as exc:
+    except (GithubException, Exception) as exc:
         logger.warning(f"Failed to fetch PR comments: {exc}")
         comments_text = ""
 
@@ -365,7 +365,8 @@ def _dispatch_ci_output(
     """Post inline comments or a single PR comment in CI mode.
 
     Attempts inline comments first; falls back to a single review comment
-    if inline posting fails.
+    if inline posting fails.  If there are no actionable items and the
+    comment is purely informational, skips posting entirely.
     """
     if filtered_items:
         logger.info(f"Posting {len(filtered_items)} individual inline review comments")
@@ -379,7 +380,7 @@ def _dispatch_ci_output(
 
         failed = [r for r in results if r.get("status") in ("failed", "error")]
         if failed:
-            logger.warning(f"{len(failed)} inline comments failed to post. " "Falling back to single review comment.")
+            logger.warning(f"{len(failed)} inline comments failed to post. Falling back to single review comment.")
             _post_single_review_comment(
                 body=review_comment,
                 github_token=github_token,
@@ -453,6 +454,13 @@ def _dispatch_ci_output(
     help="Enable cross-PR review memory via Engram",
 )
 @click.option(
+    "--mode",
+    type=click.Choice(["review", "learn"], case_sensitive=False),
+    required=False,
+    default="review",
+    help="Operation mode: review (default) or learn (post-PR analysis)",
+)
+@click.option(
     "--local",
     is_flag=True,
     default=False,
@@ -470,6 +478,7 @@ def main(
     review_level: str,
     review_memory_path: str | None,
     review_memory_enabled: bool,
+    mode: str,
     local: bool,
     files: tuple,
 ):
@@ -487,6 +496,27 @@ def main(
     # Set up Gemini client
     api_key = os.getenv("GEMINI_API_KEY")
     client = genai.Client(api_key=api_key)
+
+    # ── Learn mode: analyse closed PR discussions ────────────────────
+    if mode == "learn":
+        from src.learner import _parse_pr_number, run as learner_run
+
+        pr_number = _parse_pr_number(None)
+        repo = os.getenv("GITHUB_REPOSITORY", "")
+        engram_dir = (
+            review_memory_path
+            or os.getenv("ENGRAM_DIR", "")
+            or ".engram"
+        )
+        result = learner_run(
+            github_token=os.getenv("GITHUB_TOKEN", ""),
+            repo=repo,
+            pr_number=pr_number,
+            engram_dir=engram_dir,
+            llm_client=client,          # LLM-based classification, falls back to keywords on error
+        )
+        logger.info(f"Learn complete: {result}")
+        return
 
     # Resolve CI-only env vars (only when not in local mode)
     comments_text = ""

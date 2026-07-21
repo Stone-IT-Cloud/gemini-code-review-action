@@ -19,6 +19,7 @@ from src.llm.provider_registry import get_llm_client, list_providers, register_p
 from src.llm import gemini_client  # noqa: F401
 from src.llm import openai_client  # noqa: F401
 from src.llm import chinese_providers  # noqa: F401
+from src.llm import anthropic_client  # noqa: F401
 
 __all__ = [
     "LLMClient",

@@ -23,6 +23,7 @@ from loguru import logger
 
 from src.config import AiReviewConfig, check_required_env_vars
 from src.llm import get_llm_client
+from src.llm.review import run_review
 from src.github_client import (
     create_a_comment_to_pull_request,
     create_inline_review_comments,
@@ -607,7 +608,7 @@ def main(
         "supplemental_context": supplemental_context,
         "review_memory_context": review_memory_context,
     }
-    chunked_reviews, summarized_review = client.get_review(review_conf)
+    chunked_reviews, summarized_review = run_review(client, review_conf)
     logger.debug(f"Summarized review: {summarized_review}")
     logger.debug(f"Chunked reviews: {chunked_reviews}")
 

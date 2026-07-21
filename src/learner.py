@@ -273,8 +273,9 @@ def _classify_with_llm(
         return _classify_keywords(reply)
 
     try:
+        model = os.getenv("LLM_MODEL", "gemini-2.5-flash")
         config = LLMConfig(
-            model="gemini-2.5-flash",
+            model=model,
             temperature=0.0,
             max_output_tokens=20,
         )

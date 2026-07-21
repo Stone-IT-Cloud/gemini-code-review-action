@@ -19,11 +19,11 @@ from types import SimpleNamespace
 
 import click
 from github.GithubException import GithubException
-from google import genai
 from loguru import logger
 
 from src.config import AiReviewConfig, check_required_env_vars
-from src.gemini_client import get_review
+from src.llm import get_llm_client
+from src.llm.review import run_review
 from src.github_client import (
     create_a_comment_to_pull_request,
     create_inline_review_comments,
@@ -420,7 +420,14 @@ def _dispatch_ci_output(
     type=click.STRING,
     required=False,
     default="gemini-2.5-flash",
-    help="Gemini model name (e.g. gemini-2.5-flash, gemini-2.5-pro)",
+    help="AI model name (e.g. gemini-2.5-flash, gemini-2.5-pro)",
+)
+@click.option(
+    "--provider",
+    type=click.Choice(["gemini", "openai", "anthropic"], case_sensitive=False),
+    required=False,
+    default=None,
+    help="LLM provider (gemini, openai, anthropic). Defaults to LLM_PROVIDER env var or 'gemini'.",
 )
 @click.option("--extra-prompt", type=click.STRING, required=False, default="", help="Extra prompt")
 @click.option("--temperature", type=click.FLOAT, required=False, default=0.1, help="Temperature")
@@ -471,6 +478,7 @@ def main(
     diff_file: str | None,
     diff_chunk_size: int,
     model: str,
+    provider: str | None,
     extra_prompt: str,
     temperature: float,
     top_p: float,
@@ -493,9 +501,29 @@ def main(
     # Resolve diff from the appropriate source
     diff = _resolve_diff_source(local, files, diff_file)
 
-    # Set up Gemini client
-    api_key = os.getenv("GEMINI_API_KEY")
-    client = genai.Client(api_key=api_key)
+    # Set up LLM client via provider abstraction
+    client = get_llm_client(provider=provider)
+
+    # ── Learn mode: analyse closed PR discussions ────────────────────
+    if mode == "learn":
+        from src.learner import _parse_pr_number, run as learner_run
+
+        pr_number = _parse_pr_number(None)
+        repo = os.getenv("GITHUB_REPOSITORY", "")
+        engram_dir = (
+            review_memory_path
+            or os.getenv("ENGRAM_DIR", "")
+            or ".engram"
+        )
+        result = learner_run(
+            github_token=os.getenv("GITHUB_TOKEN", ""),
+            repo=repo,
+            pr_number=pr_number,
+            engram_dir=engram_dir,
+            llm_client=client,          # LLM-based classification, falls back to keywords on error
+        )
+        logger.info(f"Learn complete: {result}")
+        return
 
     # ── Learn mode: analyse closed PR discussions ────────────────────
     if mode == "learn":
@@ -580,7 +608,7 @@ def main(
         "supplemental_context": supplemental_context,
         "review_memory_context": review_memory_context,
     }
-    chunked_reviews, summarized_review = get_review(client, review_conf)
+    chunked_reviews, summarized_review = run_review(client, review_conf)
     logger.debug(f"Summarized review: {summarized_review}")
     logger.debug(f"Chunked reviews: {chunked_reviews}")
 

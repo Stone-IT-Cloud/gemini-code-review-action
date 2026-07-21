@@ -9,18 +9,20 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+"""LLM provider abstraction layer — multi-model support for code review."""
 
--r ./requirements.txt
+from src.llm.base import LLMClient, LLMConfig, LLMResponse
+from src.llm.provider_registry import get_llm_client, list_providers, register_provider
 
-pytest>=7,<9
-pytest-mock>=3,<5
+# Import provider modules to trigger register_provider() calls at module level.
+# Each provider module calls register_provider() at import time.
+from src.llm import gemini_client  # noqa: F401
 
-pre-commit>=3, <4
-
-ruff>=0.6,<1
-black>=24,<25
-mypy>=1.11,<2
-xenon>=0.9,<1
-bandit>=1.7,<2
-types-requests>=2.32,<3
-typing_extensions>=4.12,<5
+__all__ = [
+    "LLMClient",
+    "LLMConfig",
+    "LLMResponse",
+    "get_llm_client",
+    "list_providers",
+    "register_provider",
+]

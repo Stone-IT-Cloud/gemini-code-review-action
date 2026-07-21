@@ -18,7 +18,7 @@ from google.genai import errors
 
 from src.config import AiReviewConfig
 from src.gemini_client import DEFAULT_TOKEN_LIMIT, get_model_context_limit, get_review
-from src.quota import _handle_api_error
+from src.llm.gemini_client import GeminiClient, _handle_api_error
 
 # ---------------------------------------------------------------------------
 # get_model_context_limit
@@ -119,13 +119,15 @@ class TestGetReviewMultiChunk:
 
     def test_multi_chunk_when_diff_exceeds_budget(self, mocker):
         """Diff exceeds budget → chunking + summarization."""
-        mocker.patch("src.gemini_client.get_model_context_limit", return_value=1_000_000)
-        mocker.patch("src.gemini_client.calculate_char_budget", return_value=10)
+        mocker.patch("src.llm.gemini_client.calculate_char_budget", return_value=10)
         mock_tracker = MagicMock()
         mock_tracker.has_all_quotas_set_to_zero.return_value = False
-        mocker.patch("src.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
+        mocker.patch("src.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
 
         client = MagicMock()
+        # wrap in GeminiClient so get_context_limit returns a high token limit
+        gc = GeminiClient(client)
+        mocker.patch.object(gc, "get_context_limit", return_value=1_000_000)
 
         def _generate_content_side_effect(*_args, **_kwargs):
             resp = MagicMock()
@@ -140,19 +142,20 @@ class TestGetReviewMultiChunk:
             "prompt_chunk_size": 60,
         }
 
-        chunked = get_review(client, config)[0]
+        chunked = gc.get_review(config)[0]
 
         assert len(chunked) >= 2
 
     def test_multi_chunk_single_chunk_skips_summary(self, mocker):
         """When chunking produces only 1 chunk, no separate summarization call (just returns it)."""
-        mocker.patch("src.gemini_client.get_model_context_limit", return_value=1_000_000)
-        mocker.patch("src.gemini_client.calculate_char_budget", return_value=10)
+        mocker.patch("src.llm.gemini_client.calculate_char_budget", return_value=10)
         mock_tracker = MagicMock()
         mock_tracker.has_all_quotas_set_to_zero.return_value = False
-        mocker.patch("src.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
+        mocker.patch("src.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
 
         client = MagicMock()
+        gc = GeminiClient(client)
+        mocker.patch.object(gc, "get_context_limit", return_value=1_000_000)
         response = MagicMock()
         response.text = "only chunk"
         client.models.generate_content.return_value = response
@@ -163,16 +166,18 @@ class TestGetReviewMultiChunk:
             "prompt_chunk_size": 100,
         }
 
-        chunked = get_review(client, config)[0]
+        chunked = gc.get_review(config)[0]
 
         assert len(chunked) == 1
 
     def test_fallback_budget_on_get_model_failure(self, mocker):
-        """get_model_context_limit falls back to DEFAULT_TOKEN_LIMIT."""
-        mocker.patch("src.gemini_client.get_model_context_limit", return_value=DEFAULT_TOKEN_LIMIT)
-        mocker.patch("src.gemini_client.calculate_char_budget", return_value=100_000)
+        """get_context_limit falls back to DEFAULT_TOKEN_LIMIT."""
+        mocker.patch("src.llm.gemini_client.calculate_char_budget", return_value=100_000)
 
         client = MagicMock()
+        gc = GeminiClient(client)
+        mocker.patch.object(gc, "get_context_limit", return_value=DEFAULT_TOKEN_LIMIT)
+
         response = MagicMock()
         response.text = "fallback review"
         client.models.generate_content.return_value = response
@@ -182,7 +187,7 @@ class TestGetReviewMultiChunk:
             "diff": "small text",
         }
 
-        chunked, summary = get_review(client, config)
+        chunked, summary = gc.get_review(config)
 
         assert len(chunked) == 1
         assert "fallback review" in summary

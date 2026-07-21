@@ -16,9 +16,26 @@ description: "Automatically create a comment about differences in a pull request
 author: "rubensflinco"
 
 inputs:
+  llm_provider:
+    description: "LLM provider to use (gemini, openai, anthropic). Defaults to LLM_PROVIDER env var or 'gemini'."
+    required: false
+    default: "gemini"
   gemini_api_key:
-    description: "The Gemini AI API token to use for the action"
-    required: true
+    description: "The Gemini API key (required when provider=gemini)"
+    required: false
+    default: ""
+  openai_api_key:
+    description: "The OpenAI/DeepSeek/Kimi/Qwen API key (required when provider=openai). Also used as LLM_API_KEY for OpenRouter."
+    required: false
+    default: ""
+  anthropic_api_key:
+    description: "The Anthropic API key (required when provider=anthropic)"
+    required: false
+    default: ""
+  openai_base_url:
+    description: "Base URL for OpenAI-compatible APIs. For OpenRouter use https://openrouter.ai/api/v1"
+    required: false
+    default: ""
   github_token:
     description: "The GitHub token to use for the action"
     required: true
@@ -43,7 +60,7 @@ inputs:
     required: true
     default: "${{ github.event.pull_request.head.sha }}"
   model:
-    description: "Gemini model name (e.g. gemini-2.5-flash, gemini-2.5-pro)"
+    description: "Model name (e.g. gemini-2.5-flash, gpt-4o, claude-sonnet-4)"
     required: true
     default: "gemini-2.5-flash"
   extra_prompt:
@@ -140,6 +157,7 @@ runs:
       shell: bash
       env:
         ACTION_IMAGE_TAG: gemini-code-review-action:${{ github.run_id }}-${{ github.run_attempt }}
+        LLM_PROVIDER: ${{ inputs.llm_provider }}
         GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
         GITHUB_TOKEN: ${{ inputs.github_token }}
         GITHUB_REPOSITORY: ${{ inputs.github_repository }}
@@ -157,6 +175,9 @@ runs:
         REVIEW_MEMORY_PATH: ${{ inputs.review_memory_path }}
         ENGRAM_DIR: ${{ inputs.review_memory_path }}
         ENGRAM_ENABLED: ${{ inputs.review_memory_enabled }}
+        OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        OPENAI_BASE_URL: ${{ inputs.openai_base_url }}
       run: |
         set -euo pipefail
 
@@ -191,10 +212,19 @@ runs:
           "--review-memory-path=${REVIEW_MEMORY_PATH}"
         )
 
+        # Pass --provider if LLM_PROVIDER is set
+        if [[ -n "${LLM_PROVIDER:-}" ]]; then
+          ARGS+=( "--provider=${LLM_PROVIDER}" )
+        fi
+
         docker run --rm \
           "${VOLUMES[@]}" \
           -w "${GITHUB_WORKSPACE}" \
+          -e LLM_PROVIDER \
           -e GEMINI_API_KEY \
+          -e OPENAI_API_KEY \
+          -e ANTHROPIC_API_KEY \
+          -e OPENAI_BASE_URL \
           -e GITHUB_TOKEN \
           -e GITHUB_REPOSITORY \
           -e GITHUB_PULL_REQUEST_NUMBER \

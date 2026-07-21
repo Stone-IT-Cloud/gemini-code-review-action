@@ -23,14 +23,13 @@ from src.main import main
 class TestReviewLevelCLI:
     """Test review_level CLI parameter."""
 
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.run_review")
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
-    def test_review_level_from_cli_parameter(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+    def test_review_level_from_cli_parameter(self, _mock_check_env, mock_format, mock_run_review):
         """Test that --review-level CLI parameter is used."""
         # Setup mocks - use IMPORTANT instead of CRITICAL to avoid exit(1)
-        mock_get_review.return_value = (
+        mock_run_review.return_value = (
             ['[{"file": "test.py", "line": 1, "severity": "important", "comment": "Bug"}]'],
             "Summary",
         )
@@ -75,14 +74,13 @@ class TestReviewLevelCLI:
                 if key in os.environ:
                     del os.environ[key]
 
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.run_review")
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
-    def test_review_level_defaults_to_env_var(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+    def test_review_level_defaults_to_env_var(self, _mock_check_env, mock_format, mock_run_review):
         """Test that environment variable is used when CLI param not provided."""
         # Setup mocks
-        mock_get_review.return_value = (
+        mock_run_review.return_value = (
             ['[{"file": "test.py", "line": 1, "severity": "important", "comment": "Issue"}]'],
             "Summary",
         )
@@ -126,14 +124,13 @@ class TestReviewLevelCLI:
                 if key in os.environ:
                     del os.environ[key]
 
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.run_review")
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
-    def test_review_level_cli_overrides_env(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+    def test_review_level_cli_overrides_env(self, _mock_check_env, mock_format, mock_run_review):
         """Test that CLI parameter takes precedence over environment variable."""
         # Setup mocks - use IMPORTANT instead of CRITICAL to avoid exit(1)
-        mock_get_review.return_value = (
+        mock_run_review.return_value = (
             ['[{"file": "test.py", "line": 1, "severity": "important", "comment": "Bug"}]'],
             "Summary",
         )
@@ -180,14 +177,13 @@ class TestReviewLevelCLI:
                 if key in os.environ:
                     del os.environ[key]
 
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.run_review")
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
-    def test_review_level_defaults_to_important(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+    def test_review_level_defaults_to_important(self, _mock_check_env, mock_format, mock_run_review):
         """Test that default is IMPORTANT when neither CLI nor env is set."""
         # Setup mocks
-        mock_get_review.return_value = (
+        mock_run_review.return_value = (
             ['[{"file": "test.py", "line": 1, "severity": "important", "comment": "Issue"}]'],
             "Summary",
         )
@@ -231,13 +227,12 @@ class TestReviewLevelCLI:
                 if key in os.environ:
                     del os.environ[key]
 
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.run_review")
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
-    def test_auto_adjust_trivial_for_small_diff(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+    def test_auto_adjust_trivial_for_small_diff(self, _mock_check_env, mock_format, mock_run_review):
         """Auto-adjust to TRIVIAL when diff < 50 lines and no level specified."""
-        mock_get_review.return_value = (
+        mock_run_review.return_value = (
             ['[{"file": "test.py", "line": 1, "severity": "trivial", "comment": "Style"}]'],
             "Summary",
         )
@@ -262,14 +257,13 @@ class TestReviewLevelCLI:
             for key in ["GEMINI_API_KEY", "LOCAL", "REVIEW_LEVEL"]:
                 os.environ.pop(key, None)
 
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.run_review")
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
-    def test_auto_adjust_critical_for_large_diff(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+    def test_auto_adjust_critical_for_large_diff(self, _mock_check_env, mock_format, mock_run_review):
         """Auto-adjust to CRITICAL when diff > 500 lines and no level specified.
         CRITICAL level + CRITICAL items causes exit 1 (blocks commit)."""
-        mock_get_review.return_value = (
+        mock_run_review.return_value = (
             ['[{"file": "test.py", "line": 1, "severity": "critical", "comment": "Security"}]'],
             "Summary",
         )
@@ -295,13 +289,12 @@ class TestReviewLevelCLI:
             for key in ["GEMINI_API_KEY", "LOCAL", "REVIEW_LEVEL"]:
                 os.environ.pop(key, None)
 
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.run_review")
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
-    def test_auto_adjust_important_for_medium_diff(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+    def test_auto_adjust_important_for_medium_diff(self, _mock_check_env, mock_format, mock_run_review):
         """Auto-adjust to IMPORTANT when diff is 50-500 lines and no level specified."""
-        mock_get_review.return_value = (
+        mock_run_review.return_value = (
             ['[{"file": "test.py", "line": 1, "severity": "important", "comment": "Bug"}]'],
             "Summary",
         )
@@ -327,13 +320,12 @@ class TestReviewLevelCLI:
             for key in ["GEMINI_API_KEY", "LOCAL", "REVIEW_LEVEL"]:
                 os.environ.pop(key, None)
 
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.run_review")
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
-    def test_auto_adjust_respects_explicit_cli(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+    def test_auto_adjust_respects_explicit_cli(self, _mock_check_env, mock_format, mock_run_review):
         """CLI --review-level overrides auto-adjust even for small diffs."""
-        mock_get_review.return_value = (
+        mock_run_review.return_value = (
             ['[{"file": "test.py", "line": 1, "severity": "important", "comment": "Bug"}]'],
             "Summary",
         )
@@ -362,13 +354,12 @@ class TestReviewLevelCLI:
             for key in ["GEMINI_API_KEY", "LOCAL", "REVIEW_LEVEL"]:
                 os.environ.pop(key, None)
 
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.run_review")
     @patch("src.main.format_review_comment")
     @patch("src.main.check_required_env_vars")
-    def test_auto_adjust_respects_explicit_env(self, _mock_check_env, mock_format, mock_get_review, _mock_genai):
+    def test_auto_adjust_respects_explicit_env(self, _mock_check_env, mock_format, mock_run_review):
         """REVIEW_LEVEL env var overrides auto-adjust even for large diffs."""
-        mock_get_review.return_value = (
+        mock_run_review.return_value = (
             ['[{"file": "test.py", "line": 1, "severity": "trivial", "comment": "Style"}]'],
             "Summary",
         )

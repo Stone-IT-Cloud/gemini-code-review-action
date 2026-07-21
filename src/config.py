@@ -11,12 +11,14 @@
 #  limitations under the License.
 """Application configuration types and validation."""
 
+from __future__ import annotations
+
 import os
 from typing import NotRequired, TypedDict
 
 
 class AiReviewConfig(TypedDict):
-    """Configuration for a Gemini AI review request."""
+    """Configuration for an AI review request (provider-agnostic)."""
 
     model: str
     diff: str
@@ -25,28 +27,55 @@ class AiReviewConfig(TypedDict):
     comments_text: str
     temperature: NotRequired[float]
     top_p: NotRequired[float]
-    top_k: NotRequired[int]
     max_output_tokens: NotRequired[int]
     review_memory_context: NotRequired[str]
     supplemental_context: NotRequired[str]
 
 
-def check_required_env_vars():
-    """Check required environment variables."""
-    required_env_vars = [
-        "GEMINI_API_KEY",
-        "GITHUB_TOKEN",
-        "GITHUB_REPOSITORY",
-        "GITHUB_PULL_REQUEST_NUMBER",
-        "GIT_COMMIT_HASH",
-    ]
-    # if running locally, we only check gemini api key
-    if os.getenv("LOCAL") is not None:
-        required_env_vars = [
-            "GEMINI_API_KEY",
-        ]
+# ── Provider-specific API key env vars ──────────────────────────────────────
 
-    for required_env_var in required_env_vars:
-        value = os.getenv(required_env_var)
+_PROVIDER_API_KEYS: dict[str, str] = {
+    "gemini": "GEMINI_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+}
+
+_CI_REQUIRED_VARS = [
+    "GITHUB_TOKEN",
+    "GITHUB_REPOSITORY",
+    "GITHUB_PULL_REQUEST_NUMBER",
+    "GIT_COMMIT_HASH",
+]
+
+
+def _detect_provider() -> str:
+    """Read the active provider from env var, defaulting to ``"gemini"``."""
+    return (os.getenv("LLM_PROVIDER") or "gemini").strip().lower()
+
+
+def check_required_env_vars() -> None:
+    """Check required environment variables based on the active provider.
+
+    Raises:
+        ValueError: If any required variable is missing or empty.
+    """
+    provider = _detect_provider()
+
+    required: list[str] = []
+
+    # Provider API key
+    api_key_var = _PROVIDER_API_KEYS.get(provider)
+    if api_key_var:
+        required.append(api_key_var)
+
+    # CI-only vars (not needed in local mode)
+    if os.getenv("LOCAL") is None:
+        required.extend(_CI_REQUIRED_VARS)
+
+    for var in required:
+        value = os.getenv(var)
         if value is None or not value.strip():
-            raise ValueError(f"{required_env_var} is not set or is empty")
+            raise ValueError(
+                f"{var} is not set or is empty. "
+                f"This variable is required when LLM_PROVIDER={provider!r}."
+            )

@@ -1,11 +1,30 @@
-name: PR Code Review
+name: PR Code Review (Dogfooding)
 
 on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: gemini-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run tests
+        run: |
+          python -m pytest test/ -v --tb=short
+
   review:
+    needs: [tests]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -38,9 +57,10 @@ jobs:
           path: .engram
           key: review-memory-${{ github.repository }}
 
-      - name: Code Review by Gemini AI
+      - name: Code Review (dogfooding — uses local ./ action)
         uses: ./
         with:
+          llm_provider: gemini
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           github_repository: ${{ github.repository }}

@@ -27,10 +27,8 @@ from src.llm.gemini_client import (
     _handle_api_error,
     _looks_like_daily_quota_exhausted,
 )
-
-# Wrap module-level functions for backward compat
-# Old signature: get_review(client, config) → client was a genai.Client
-# New: GeminiClient wraps it.
+from src.quota import QuotaTracker
+from src.utils import calculate_char_budget, chunk_string
 
 
 def get_review(client: Any, config: dict) -> tuple[list[str], str]:

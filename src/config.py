@@ -38,6 +38,11 @@ _PROVIDER_API_KEYS: dict[str, str] = {
     "gemini": "GEMINI_API_KEY",
     "openai": "OPENAI_API_KEY",
     "openrouter": "OPENAI_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+    "qwen": "QWEN_API_KEY",
+    "kimi": "KIMI_API_KEY",
+    "baichuan": "BAICHUAN_API_KEY",
+    "zhipu": "ZHIPU_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
 }
 

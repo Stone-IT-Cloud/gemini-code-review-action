@@ -17,7 +17,7 @@ author: "rubensflinco"
 
 inputs:
   llm_provider:
-    description: "LLM provider to use (gemini, openai, openrouter, anthropic). Defaults to LLM_PROVIDER env var or 'gemini'."
+    description: "LLM provider (gemini, openai, openrouter, deepseek, qwen, kimi, baichuan, zhipu, anthropic). Defaults to 'gemini'."
     required: false
     default: "gemini"
   gemini_api_key:

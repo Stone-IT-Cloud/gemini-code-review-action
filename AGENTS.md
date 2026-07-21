@@ -76,6 +76,11 @@ Then add `from src.llm import myclient` to `src/llm/__init__.py`.
 | gemini | `GEMINI_API_KEY` | — | — |
 | openai | `OPENAI_API_KEY` or `LLM_API_KEY` | `OPENAI_BASE_URL` | `https://api.openai.com/v1` |
 | openrouter | `OPENAI_API_KEY` or `LLM_API_KEY` | `OPENAI_BASE_URL` | `https://openrouter.ai/api/v1` |
+| deepseek | `DEEPSEEK_API_KEY` | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` |
+| qwen | `QWEN_API_KEY` or `DASHSCOPE_API_KEY` | `QWEN_BASE_URL` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| kimi | `KIMI_API_KEY` or `MOONSHOT_API_KEY` | `KIMI_BASE_URL` | `https://api.moonshot.cn/v1` |
+| baichuan | `BAICHUAN_API_KEY` | `BAICHUAN_BASE_URL` | `https://api.baichuan-ai.com/v1` |
+| zhipu | `ZHIPU_API_KEY` | `ZHIPU_BASE_URL` | `https://open.bigmodel.cn/api/paas/v4` |
 | (yours) | `YOUR_API_KEY` | `YOUR_BASE_URL` | — |
 
 ### Testing

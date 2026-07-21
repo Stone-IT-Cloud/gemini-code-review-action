@@ -214,7 +214,16 @@ def format_review_comment(
 
     # Build the body (with or without details wrapper)
     if len(chunked_reviews) <= 1:
-        body = structured_body or summarized_review
+        # Use structured_body; if empty, use summarized_review only if it's
+        # human-readable text (not raw JSON).
+        if not structured_body:
+            stripped = summarized_review.strip()
+            if stripped.startswith("[") or stripped.startswith("{"):
+                body = ""
+            else:
+                body = summarized_review
+        else:
+            body = structured_body
     else:
         body = (
             f"<details>\n"

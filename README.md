@@ -111,7 +111,17 @@ To use any model from OpenRouter, just change the `model` parameter to the [mode
     openai_base_url: https://api.openai.com/v1
 ```
 
-### DeepSeek (via openai provider)
+### DeepSeek (via dedicated deepseek provider)
+
+```yaml
+- uses: Stone-IT-Cloud/gemini-code-review-action@v1
+  with:
+    llm_provider: deepseek
+    deepseek_api_key: ${{ secrets.DEEPSEEK_API_KEY }}
+    model: deepseek-chat
+```
+
+Or via the generic `openai` provider (any OpenAI-compatible API):
 
 ```yaml
 - uses: Stone-IT-Cloud/gemini-code-review-action@v1
@@ -120,6 +130,46 @@ To use any model from OpenRouter, just change the `model` parameter to the [mode
     openai_api_key: ${{ secrets.DEEPSEEK_API_KEY }}
     model: deepseek-chat
     openai_base_url: https://api.deepseek.com/v1
+```
+
+### Qwen (Alibaba Cloud)
+
+```yaml
+- uses: Stone-IT-Cloud/gemini-code-review-action@v1
+  with:
+    llm_provider: qwen
+    qwen_api_key: ${{ secrets.QWEN_API_KEY }}
+    model: qwen-plus
+```
+
+### Kimi (Moonshot AI)
+
+```yaml
+- uses: Stone-IT-Cloud/gemini-code-review-action@v1
+  with:
+    llm_provider: kimi
+    kimi_api_key: ${{ secrets.KIMI_API_KEY }}
+    model: moonshot-v1-128k
+```
+
+### Baichuan AI
+
+```yaml
+- uses: Stone-IT-Cloud/gemini-code-review-action@v1
+  with:
+    llm_provider: baichuan
+    baichuan_api_key: ${{ secrets.BAICHUAN_API_KEY }}
+    model: Baichuan4
+```
+
+### Zhipu AI (GLM)
+
+```yaml
+- uses: Stone-IT-Cloud/gemini-code-review-action@v1
+  with:
+    llm_provider: zhipu
+    zhipu_api_key: ${{ secrets.ZHIPU_API_KEY }}
+    model: glm-4-plus
 ```
 
 ## Features
@@ -446,6 +496,7 @@ src/
     ├── provider_registry.py  # Provider registration and factory
     ├── gemini_client.py # Gemini provider
     ├── openai_client.py # OpenAI-compatible provider (OpenRouter, DeepSeek, etc.)
+    ├── chinese_providers.py  # DeepSeek, Qwen, Kimi, Baichuan, ZhipuAI
     └── review.py        # Provider-agnostic review workflow (chunking, summarization)
 ```
 ## Architecture: LLM Provider Abstraction

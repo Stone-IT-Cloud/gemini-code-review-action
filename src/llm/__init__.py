@@ -9,13 +9,16 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+"""LLM provider abstraction layer — multi-model support for code review."""
 
-click==8.1.3
-loguru==0.7.0
+from src.llm.base import LLMClient, LLMConfig, LLMResponse
+from src.llm.provider_registry import get_llm_client, list_providers, register_provider
 
-pydantic>=2,<3
-requests==2.32.2
-
-google-genai
-PyGithub==2.7.0
-zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
+__all__ = [
+    "LLMClient",
+    "LLMConfig",
+    "LLMResponse",
+    "get_llm_client",
+    "list_providers",
+    "register_provider",
+]

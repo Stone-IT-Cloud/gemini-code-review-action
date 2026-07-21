@@ -16,9 +16,14 @@ description: "Automatically create a comment about differences in a pull request
 author: "rubensflinco"
 
 inputs:
+  llm_provider:
+    description: "LLM provider to use (gemini, openai, anthropic). Defaults to LLM_PROVIDER env var or 'gemini'."
+    required: false
+    default: "gemini"
   gemini_api_key:
-    description: "The Gemini AI API token to use for the action"
-    required: true
+    description: "The Gemini API key (required when provider=gemini)"
+    required: false
+    default: ""
   github_token:
     description: "The GitHub token to use for the action"
     required: true
@@ -43,7 +48,7 @@ inputs:
     required: true
     default: "${{ github.event.pull_request.head.sha }}"
   model:
-    description: "Gemini model name (e.g. gemini-2.5-flash, gemini-2.5-pro)"
+    description: "Model name (e.g. gemini-2.5-flash, gpt-4o, claude-sonnet-4)"
     required: true
     default: "gemini-2.5-flash"
   extra_prompt:
@@ -140,6 +145,7 @@ runs:
       shell: bash
       env:
         ACTION_IMAGE_TAG: gemini-code-review-action:${{ github.run_id }}-${{ github.run_attempt }}
+        LLM_PROVIDER: ${{ inputs.llm_provider }}
         GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
         GITHUB_TOKEN: ${{ inputs.github_token }}
         GITHUB_REPOSITORY: ${{ inputs.github_repository }}

@@ -23,8 +23,16 @@ from src.main import generate_diff_from_files, main, print_local_review
 
 def strip_ansi_codes(text: str) -> str:
     """Remove ANSI color codes from text."""
-    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    ansi_escape = re.compile(r"\x1B\[[0-9;]*[a-zA-Z]")
     return ansi_escape.sub("", text)
+
+
+def _mock_client(get_review_return=None):
+    """Build a mock LLM client with a configurable get_review method."""
+    client = MagicMock()
+    if get_review_return is not None:
+        client.get_review.return_value = get_review_return
+    return client
 
 
 class TestLocalMode:
@@ -32,13 +40,15 @@ class TestLocalMode:
 
     # pylint: disable=unused-argument
     @patch("src.main.subprocess.run")
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.get_llm_client")
     @patch("src.main.check_required_env_vars")
-    def test_local_mode_with_no_staged_changes(self, mock_check_env, mock_get_review, mock_genai, mock_subprocess):
+    def test_local_mode_with_no_staged_changes(self, mock_check_env, mock_get_llm_client, mock_subprocess):
         """Test that local mode exits cleanly when no staged changes."""
         # Mock subprocess to return empty diff
         mock_subprocess.return_value = MagicMock(stdout="", returncode=0)
+
+        # Mock the LLM client factory
+        mock_get_llm_client.return_value = _mock_client()
 
         # Set required environment variable
         os.environ["GEMINI_API_KEY"] = "test-key"
@@ -58,7 +68,7 @@ class TestLocalMode:
             assert result.exit_code == 0, f"Command failed: {result.output}"
 
             # Verify get_review was NOT called (no diff to review)
-            mock_get_review.assert_not_called()
+            mock_get_llm_client.return_value.get_review.assert_not_called()
 
         finally:
             # Cleanup
@@ -67,20 +77,21 @@ class TestLocalMode:
                     del os.environ[key]
 
     @patch("src.main.subprocess.run")
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.get_llm_client")
     @patch("src.main.check_required_env_vars")
     @patch("src.main.print_local_review")
     def test_local_mode_with_critical_issues_exits_1(self, *mocks):
         """Test that local mode exits with code 1 when critical issues found."""
-        mock_print, _, mock_get_review, _, mock_subprocess = mocks
+        mock_print, _, mock_get_llm_client, mock_subprocess = mocks
         # Mock subprocess to return a diff
         mock_subprocess.return_value = MagicMock(stdout="diff --git a/test.py b/test.py\n", returncode=0)
 
-        # Mock review to return critical issue
-        mock_get_review.return_value = (
-            ['[{"file": "test.py", "line": 1, ' '"severity": "critical", "comment": "Security issue"}]'],
-            "Critical security vulnerability found",
+        # Mock the LLM client factory to return a client with review data
+        mock_get_llm_client.return_value = _mock_client(
+            get_review_return=(
+                ['[{"file": "test.py", "line": 1, "severity": "critical", "comment": "Security issue"}]'],
+                "Critical security vulnerability found",
+            )
         )
 
         # Set required environment variable
@@ -110,20 +121,21 @@ class TestLocalMode:
                     del os.environ[key]
 
     @patch("src.main.subprocess.run")
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.get_llm_client")
     @patch("src.main.check_required_env_vars")
     @patch("src.main.print_local_review")
     def test_local_mode_with_important_issues_exits_0(self, *mocks):
         """Test that local mode exits with code 0 when only important issues found."""
-        mock_print, _, mock_get_review, _, mock_subprocess = mocks
+        mock_print, _, mock_get_llm_client, mock_subprocess = mocks
         # Mock subprocess to return a diff
         mock_subprocess.return_value = MagicMock(stdout="diff --git a/test.py b/test.py\n", returncode=0)
 
         # Mock review to return important issue (not critical)
-        mock_get_review.return_value = (
-            ['[{"file": "test.py", "line": 1, "severity": "important", "comment": "Logic error"}]'],
-            "Some issues found",
+        mock_get_llm_client.return_value = _mock_client(
+            get_review_return=(
+                ['[{"file": "test.py", "line": 1, "severity": "important", "comment": "Logic error"}]'],
+                "Some issues found",
+            )
         )
 
         # Set required environment variable
@@ -153,20 +165,21 @@ class TestLocalMode:
                     del os.environ[key]
 
     @patch("src.main.subprocess.run")
-    @patch("src.main.genai")
-    @patch("src.main.get_review")
+    @patch("src.main.get_llm_client")
     @patch("src.main.check_required_env_vars")
     @patch("src.main.print_local_review")
     def test_local_mode_with_no_issues_exits_0(self, *mocks):
         """Test that local mode exits with code 0 when no issues found."""
-        mock_print, _, mock_get_review, _, mock_subprocess = mocks
+        mock_print, _, mock_get_llm_client, mock_subprocess = mocks
         # Mock subprocess to return a diff
         mock_subprocess.return_value = MagicMock(stdout="diff --git a/test.py b/test.py\n", returncode=0)
 
         # Mock review to return no issues
-        mock_get_review.return_value = (
-            ["[]"],
-            "No issues found",
+        mock_get_llm_client.return_value = _mock_client(
+            get_review_return=(
+                ["[]"],
+                "No issues found",
+            )
         )
 
         # Set required environment variable

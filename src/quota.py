@@ -9,105 +9,28 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Quota-aware request throttling with exponential backoff and jitter."""
+"""Quota-aware request throttling with exponential backoff and jitter.
+
+Provider-agnostic: the ``QuotaTracker`` works with any LLM provider.
+Per-provider error handling (``_handle_api_error``) lives in the
+respective provider module (e.g. ``src/llm/gemini_client.py``).
+"""
+
+from __future__ import annotations
 
 import os
-import secrets
 import time
 from collections import deque
 from dataclasses import dataclass, field
 
-from google.genai import errors
-from loguru import logger
-
 from src.utils import _get_usage_metadata, _safe_str
-
-
-class NoQuotaAvailableError(RuntimeError):
-    """Raised when we detect there is no quota available (fail-fast)."""
-
-
-def _looks_like_daily_quota_exhausted(message: str) -> bool:
-    """Heuristic: detect daily quota exhaustion from error text."""
-    msg = (message or "").lower()
-    return any(
-        needle in msg
-        for needle in (
-            "per day",
-            "daily",
-            "requests per day",
-            "rpd",
-            "day quota",
-        )
-    )
-
-
-def _sleep_with_jitter(seconds: float) -> None:
-    """Sleep with a small random jitter to avoid synchronized retries."""
-    # Jitter in [0, 1.0) seconds, capped so it never dominates the delay.
-    jitter = min(1.0, secrets.randbelow(1_000_000_000) / 1_000_000_000.0)
-    time.sleep(max(0.0, seconds + jitter))
-
-
-def _handle_api_error(
-    error,
-    *,
-    attempt: int,
-    max_attempts: int,
-    initial_wait: float,
-    max_wait: float,
-    fail_fast_on_no_quota: bool,
-) -> bool:
-    """Handle API errors with exponential backoff + jitter.
-
-    Returns True if the caller should retry (and we already waited), else False.
-    """
-    is_last_attempt = (attempt + 1) >= max_attempts
-
-    if not isinstance(error, errors.APIError):
-        logger.error(f"Unexpected non-API error: {_safe_str(error)}")
-        return False
-
-    code = getattr(error, "code", None)
-    err_text = _safe_str(error)
-
-    # 429 — ResourceExhausted (rate limit / quota exceeded)
-    if code == 429:
-        logger.warning(f"Rate limit / quota exceeded details: {err_text}")
-
-        if fail_fast_on_no_quota and _looks_like_daily_quota_exhausted(err_text):
-            logger.error("Daily quota exhausted and fail-fast is enabled; aborting without retries.")
-            raise error
-
-        if is_last_attempt:
-            logger.error("Rate limit hit. No retries remaining.")
-            return False
-        wait_time = min(max_wait, initial_wait * (2**attempt))
-        logger.warning(f"Rate limit hit. Waiting {wait_time:.0f}s before retry...")
-        _sleep_with_jitter(wait_time)
-        return True
-
-    # 504 — DeadlineExceeded (timeout)
-    if code == 504:
-        logger.error("API request timed out")
-        return not is_last_attempt
-
-    # 400 — InvalidArgument (bad request, do not retry)
-    if code == 400:
-        logger.error(f"Invalid API request: {err_text}")
-        return False
-
-    # Any other APIError — do not retry on unknown codes
-    logger.error(f"Unexpected API error (code={code}): {err_text}")
-    return False
 
 
 @dataclass
 class QuotaTracker:
     """Track run-local usage and provide best-effort remaining-quota hints.
 
-    Note: The Gemini API (AI Studio) does not reliably expose "remaining quota"
-    counters to clients. This tracker logs:
+    The tracker logs:
     - actual per-request usage (when ``usage_metadata`` is provided)
     - run-estimated remaining RPM/TPM/RPD from *completed* requests if you
       provide limits via env vars (in-flight/pending requests are not counted)
@@ -119,15 +42,23 @@ class QuotaTracker:
     requests_total: int = 0
     tokens_total: int = 0
     last_pruned_at: float = 0.0
-    prune_interval_seconds: float = 1.0  # Only prune if this much time has elapsed
+    prune_interval_seconds: float = 1.0
 
     quota_rpm: int | None = None
     quota_tpm: int | None = None
     quota_rpd: int | None = None
 
     @staticmethod
-    def from_env() -> "QuotaTracker":
-        """Create a QuotaTracker from environment variable config."""
+    def from_env(prefix: str = "GEMINI") -> QuotaTracker:
+        """Create a QuotaTracker from environment variable config.
+
+        Args:
+            prefix: Env var prefix for quota limits (e.g. ``"GEMINI"``
+                    reads ``GEMINI_QUOTA_RPM``, ``GEMINI_QUOTA_TPM``, etc.).
+
+        Returns:
+            A configured ``QuotaTracker`` instance.
+        """
 
         def _parse_int(name: str) -> int | None:
             raw = os.getenv(name)
@@ -148,13 +79,12 @@ class QuotaTracker:
             return value
 
         return QuotaTracker(
-            quota_rpm=_parse_int("GEMINI_QUOTA_RPM"),
-            quota_tpm=_parse_int("GEMINI_QUOTA_TPM"),
-            quota_rpd=_parse_int("GEMINI_QUOTA_RPD"),
+            quota_rpm=_parse_int(f"{prefix}_QUOTA_RPM"),
+            quota_tpm=_parse_int(f"{prefix}_QUOTA_TPM"),
+            quota_rpd=_parse_int(f"{prefix}_QUOTA_RPD"),
         )
 
     def _prune(self, now: float) -> None:
-        # Optimization: only prune if enough time has passed since last prune
         if now - self.last_pruned_at < self.prune_interval_seconds:
             return
         cutoff = now - self.window_seconds
@@ -211,7 +141,7 @@ class QuotaTracker:
             and self.quota_rpd == 0
         )
 
-    def log_after_response(self, response, label: str) -> None:
+    def log_after_response(self, response, label: str, prefix: str = "GEMINI") -> None:
         """Log usage metadata and remaining quota estimate after a response."""
         now = time.time()
         usage = _get_usage_metadata(response)
@@ -226,11 +156,18 @@ class QuotaTracker:
             output_tokens = usage.get("output_tokens", "?")
             total_tokens_val = usage.get("total_tokens", "?")
             usage_bits.append(
-                "usage_tokens=" f"prompt={prompt_tokens}," f"output={output_tokens}," f"total={total_tokens_val}"
+                "usage_tokens="
+                f"prompt={prompt_tokens},"
+                f"output={output_tokens},"
+                f"total={total_tokens_val}"
             )
         if remaining:
             usage_bits.append("run_estimated_remaining=" + ",".join(f"{k}={v}" for k, v in remaining.items()))
         if not usage_bits:
             usage_bits.append("usage_metadata=<not provided by API>")
         joined_usage_bits = ", ".join(usage_bits)
+
+        # Local import to avoid circular dependency at module level
+        from loguru import logger  # pylint: disable=import-outside-toplevel
+
         logger.info(f"{label} {joined_usage_bits}")

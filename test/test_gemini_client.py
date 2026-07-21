@@ -18,7 +18,7 @@ from google.genai import errors
 
 from src.config import AiReviewConfig
 from src.gemini_client import DEFAULT_TOKEN_LIMIT, get_model_context_limit, get_review
-from src.quota import _handle_api_error
+from src.llm.gemini_client import _handle_api_error
 
 # ---------------------------------------------------------------------------
 # get_model_context_limit

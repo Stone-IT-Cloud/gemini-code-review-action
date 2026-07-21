@@ -26,6 +26,7 @@ from typing import Any
 import requests
 from loguru import logger
 
+from src.llm import LLMClient, LLMConfig
 from src.review_memory import ensure_engram, store_decisions_batch
 
 # ── Keywords used when no LLM is available (fallback) ──────────────────────
@@ -257,24 +258,28 @@ def _classify_with_llm(
 ) -> str:
     """Classify using an LLM (Gemini).
 
-    Sends a single prompt (~100 tokens) to Gemini for classification.
+    Sends a single prompt (~100 tokens) to the LLM for classification.
     Falls back to keyword matching on error or unexpected response.
     """
+    if not isinstance(llm_client, LLMClient):
+        return _classify_keywords(reply)
+
     try:
         prompt = _CLASSIFY_PROMPT.format(
             suggestion=suggestion[:500],
             reply=reply[:500],
         )
     except (KeyError, ValueError):
-        # Handle potential format issues
         return _classify_keywords(reply)
 
     try:
-        response = llm_client.models.generate_content(
+        config = LLMConfig(
             model="gemini-2.5-flash",
-            contents=prompt,
+            temperature=0.0,
+            max_output_tokens=20,
         )
-        result = response.text.strip().lower()
+        response = llm_client.generate_content(prompt, config)
+        result = response.text.strip().lower() if response.text else ""
         if result not in ("rejected", "accepted", "acknowledged"):
             return _classify_keywords(reply)
         return result

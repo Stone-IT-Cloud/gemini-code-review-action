@@ -9,15 +9,15 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""OpenAI-compatible provider — supports OpenRouter, OpenAI, DeepSeek, Kimi, Qwen.
+"""OpenAI-compatible provider — supports OpenAI, OpenRouter, DeepSeek, Kimi, Qwen.
 
 Uses the OpenAI-compatible ``/chat/completions`` REST API via ``requests``.
 Configure via environment variables:
   - ``OPENAI_API_KEY`` or ``LLM_API_KEY`` (required)
-  - ``OPENAI_BASE_URL`` (optional, defaults to ``https://openrouter.ai/api/v1``)
+  - ``OPENAI_BASE_URL`` (optional, defaults to ``https://api.openai.com/v1``)
 
-To use OpenRouter, leave ``OPENAI_BASE_URL`` unset (defaults to OpenRouter).
-To use OpenAI directly, set ``OPENAI_BASE_URL=https://api.openai.com/v1``.
+Registered as ``"openai"`` (defaults to OpenAI) and ``"openrouter"`` (defaults to
+OpenRouter). Both use the same ``OpenAIClient`` class under the hood.
 """
 
 from __future__ import annotations
@@ -32,7 +32,8 @@ from src.llm.base import LLMClient, LLMConfig, LLMResponse
 from src.llm.provider_registry import register_provider
 
 DEFAULT_TOKEN_LIMIT = 128_000
-DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+OPENAI_BASE_URL = "https://api.openai.com/v1"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # Known context limits for common models (tokens)
 _KNOWN_CONTEXT_LIMITS: dict[str, int] = {
@@ -78,7 +79,7 @@ class OpenAIClient(LLMClient):
         """Create an OpenAIClient from environment variables.
 
         Reads ``OPENAI_API_KEY`` (or ``LLM_API_KEY`` as fallback)
-        and ``OPENAI_BASE_URL`` (defaults to OpenRouter).
+        and ``OPENAI_BASE_URL`` (defaults to OpenAI API).
         """
         api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
         if not api_key:
@@ -86,7 +87,7 @@ class OpenAIClient(LLMClient):
                 "OPENAI_API_KEY or LLM_API_KEY is required for the 'openai' provider. "
                 "Set it as an environment variable."
             )
-        base_url = os.getenv("OPENAI_BASE_URL", DEFAULT_BASE_URL)
+        base_url = os.getenv("OPENAI_BASE_URL", OPENAI_BASE_URL)
         return cls(api_key=api_key, base_url=base_url)
 
     def generate_content(self, prompt: str, config: LLMConfig) -> LLMResponse:
@@ -151,4 +152,28 @@ class OpenAIClient(LLMClient):
         return payload
 
 
+class OpenRouterClient(OpenAIClient):
+    """OpenAIClient subclass that defaults to OpenRouter's base URL.
+
+    Registered as ``"openrouter"`` provider.
+    """
+
+    @classmethod
+    def from_env(cls) -> OpenRouterClient:
+        """Create an OpenRouter client from environment variables.
+
+        Reads ``OPENAI_API_KEY`` (or ``LLM_API_KEY``) and ``OPENAI_BASE_URL``
+        (defaults to ``https://openrouter.ai/api/v1``).
+        """
+        api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "OPENAI_API_KEY or LLM_API_KEY is required for the 'openrouter' provider. "
+                "Set it as an environment variable."
+            )
+        base_url = os.getenv("OPENAI_BASE_URL", OPENROUTER_BASE_URL)
+        return cls(api_key=api_key, base_url=base_url)
+
+
 register_provider("openai", OpenAIClient)
+register_provider("openrouter", OpenRouterClient)

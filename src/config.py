@@ -37,6 +37,7 @@ class AiReviewConfig(TypedDict):
 _PROVIDER_API_KEYS: dict[str, str] = {
     "gemini": "GEMINI_API_KEY",
     "openai": "OPENAI_API_KEY",
+    "openrouter": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
 }
 

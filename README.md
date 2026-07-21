@@ -66,17 +66,26 @@ The action supports multiple LLM providers. Set the `llm_provider` input (or `LL
     model: gemini-2.5-flash
 ```
 
-### OpenRouter (any model from 300+ providers)
-
-[OpenRouter](https://openrouter.ai) gives you access to 300+ models (OpenAI, Anthropic, Google, Meta, Mistral, DeepSeek, Qwen, etc.) through a single API.
+### OpenAI (default for openai provider)
 
 ```yaml
 - uses: Stone-IT-Cloud/gemini-code-review-action@v1
   with:
     llm_provider: openai
+    openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+    model: gpt-4o
+```
+
+### OpenRouter (any model from 300+ providers)
+
+[OpenRouter](https://openrouter.ai) gives you access to 300+ models (OpenAI, Anthropic, Google, Meta, Mistral, DeepSeek, Qwen, etc.) through a single API. Use `llm_provider: openrouter` (no need to set `openai_base_url`).
+
+```yaml
+- uses: Stone-IT-Cloud/gemini-code-review-action@v1
+  with:
+    llm_provider: openrouter
     openai_api_key: ${{ secrets.OPENROUTER_API_KEY }}
     model: openai/gpt-4o          # Any OpenRouter model slug
-    openai_base_url: https://openrouter.ai/api/v1  # Default, can omit
 ```
 
 To use any model from OpenRouter, just change the `model` parameter to the [model slug](https://openrouter.ai/models) you want:
@@ -102,7 +111,7 @@ To use any model from OpenRouter, just change the `model` parameter to the [mode
     openai_base_url: https://api.openai.com/v1
 ```
 
-### DeepSeek
+### DeepSeek (via openai provider)
 
 ```yaml
 - uses: Stone-IT-Cloud/gemini-code-review-action@v1

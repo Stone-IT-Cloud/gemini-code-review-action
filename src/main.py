@@ -424,7 +424,7 @@ def _dispatch_ci_output(
 )
 @click.option(
     "--provider",
-    type=click.Choice(["gemini", "openai", "anthropic"], case_sensitive=False),
+    type=click.Choice(["gemini", "openai", "openrouter", "anthropic"], case_sensitive=False),
     required=False,
     default=None,
     help="LLM provider (gemini, openai, anthropic). Defaults to LLM_PROVIDER env var or 'gemini'.",

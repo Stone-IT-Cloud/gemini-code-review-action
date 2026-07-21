@@ -74,7 +74,8 @@ Then add `from src.llm import myclient` to `src/llm/__init__.py`.
 | Provider | API key env | Base URL env | Default URL |
 |----------|------------|-------------|-------------|
 | gemini | `GEMINI_API_KEY` | — | — |
-| openai | `OPENAI_API_KEY` or `LLM_API_KEY` | `OPENAI_BASE_URL` | `https://openrouter.ai/api/v1` |
+| openai | `OPENAI_API_KEY` or `LLM_API_KEY` | `OPENAI_BASE_URL` | `https://api.openai.com/v1` |
+| openrouter | `OPENAI_API_KEY` or `LLM_API_KEY` | `OPENAI_BASE_URL` | `https://openrouter.ai/api/v1` |
 | (yours) | `YOUR_API_KEY` | `YOUR_BASE_URL` | — |
 
 ### Testing

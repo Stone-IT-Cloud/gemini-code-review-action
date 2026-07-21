@@ -14,6 +14,10 @@
 from src.llm.base import LLMClient, LLMConfig, LLMResponse
 from src.llm.provider_registry import get_llm_client, list_providers, register_provider
 
+# Import provider modules to trigger register_provider() calls at module level.
+# Each provider module calls register_provider() at import time.
+from src.llm import gemini_client  # noqa: F401
+
 __all__ = [
     "LLMClient",
     "LLMConfig",

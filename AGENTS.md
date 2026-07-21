@@ -40,3 +40,50 @@ rtk pip list            rtk pnpm install        rtk npm run <script>
 - For debugging, use raw command without rtk prefix
 - `rtk proxy <cmd>` runs command without filtering but tracks usage
 <!-- /headroom:rtk-instructions -->
+
+## LLM Provider Architecture
+
+The action supports multiple LLM providers via a clean abstraction layer in `src/llm/`:
+
+- **`src/llm/base.py`**: `LLMClient` ABC — implement `generate_content()` and `get_context_limit()`
+- **`src/llm/provider_registry.py`**: `register_provider(name, class)` + `get_llm_client(provider)`
+- **`src/llm/review.py`**: `run_review(client, config)` — provider-agnostic chunking + summarization
+- **`src/llm/gemini_client.py`**: Gemini via `google.genai` SDK
+- **`src/llm/openai_client.py`**: OpenAI-compatible (OpenRouter, DeepSeek, etc.) via `requests`
+
+### Adding a new provider
+
+```python
+# src/llm/myclient.py
+from src.llm.base import LLMClient, LLMConfig, LLMResponse
+from src.llm.provider_registry import register_provider
+
+class MyClient(LLMClient):
+    @classmethod
+    def from_env(cls) -> 'MyClient': ...
+    def generate_content(self, prompt, config) -> LLMResponse: ...
+    def get_context_limit(self, model) -> int: ...
+
+register_provider("myclient", MyClient)
+```
+
+Then add `from src.llm import myclient` to `src/llm/__init__.py`.
+
+### Provider env vars
+
+| Provider | API key env | Base URL env | Default URL |
+|----------|------------|-------------|-------------|
+| gemini | `GEMINI_API_KEY` | — | — |
+| openai | `OPENAI_API_KEY` or `LLM_API_KEY` | `OPENAI_BASE_URL` | `https://openrouter.ai/api/v1` |
+| (yours) | `YOUR_API_KEY` | `YOUR_BASE_URL` | — |
+
+### Testing
+
+```bash
+# All tests
+rtk pytest tests/
+
+# Provider-specific
+rtk pytest test/test_openai_client.py -v
+rtk pytest test/test_provider_registry.py -v
+```

@@ -1,23 +1,28 @@
-# gemini-code-review-action
-GitHub Action that uses Google Gemini to automatically review Pull Requests.
+# AI Code Review Action
 
-If the diff exceeds the model's context window, the Action splits it into chunks and requests feedback per chunk, then produces a final summary and posts a single PR review. The Action also reads existing PR discussion (general comments, inline review comments, and past review summaries) and feeds them to Gemini as context so the review considers prior feedback.
+GitHub Action that uses AI (Gemini, OpenRouter, OpenAI, Anthropic, DeepSeek, etc.) to automatically review Pull Requests.
+
+If the diff exceeds the model's context window, the Action splits it into chunks and requests feedback per chunk, then produces a final summary and posts a single PR review. The Action also reads existing PR discussion (general comments, inline review comments, and past review summaries) and feeds them to the AI as context so the review considers prior feedback.
 
 ## Pre-requisites
-- Set a repository secret `GEMINI_API_KEY` with your Gemini API key.
-  - Get an API key: [GET MY API KEY](https://makersuite.google.com/app/apikey)
+
+- Set a repository secret with your preferred provider's API key (see [Provider Configuration](#provider-configuration) below).
 - The workflow should grant `contents: read` and `pull-requests: write` permissions (see example below).
 
 ## Inputs
 
-- `gemini_api_key` (required): Gemini API key (secret recommended).
+- `llm_provider` (optional): LLM provider (`gemini`, `openai`, `anthropic`). Defaults to `gemini`.
+- `gemini_api_key` (optional, required when provider=gemini): Gemini API key.
+- `openai_api_key` (optional, required when provider=openai): API key for OpenAI/OpenRouter/DeepSeek/etc.
+- `anthropic_api_key` (optional, required when provider=anthropic): Anthropic API key.
+- `openai_base_url` (optional): Base URL for OpenAI-compatible APIs. Defaults to `https://openrouter.ai/api/v1`.
 - `github_token` (required): GitHub token. Use the default `${{ secrets.GITHUB_TOKEN }}`.
 - `dockerhub_username` (optional): Docker Hub username to authenticate pulls during the action image build (helps avoid Docker Hub rate limits).
 - `dockerhub_token` (optional): Docker Hub access token/password (secret recommended).
 - `github_repository` (required): Target repository (defaults to `${{ github.repository }}`).
 - `github_pull_request_number` (required): PR number (defaults to `${{ github.event.pull_request.number }}`).
 - `git_commit_hash` (required): PR head SHA (defaults to `${{ github.event.pull_request.head.sha }}`).
-- `model` (required): Gemini model name (e.g., `gemini-2.5-flash`, `gemini-2.5-pro`).
+- `model` (required): AI model name (e.g., `gemini-2.5-flash`, `openai/gpt-4o`, `anthropic/claude-sonnet-4`, `deepseek/deepseek-chat`).
 - `extra_prompt` (optional): Additional system guidance to steer the review.
 - `temperature` (optional): Sampling temperature.
 - `top_p` (optional): Nucleus sampling.
@@ -45,6 +50,67 @@ env:
   GEMINI_QUOTA_RPM: "60"
   GEMINI_QUOTA_TPM: "32000"
   GEMINI_QUOTA_RPD: "1500"
+```
+
+## Provider Configuration
+
+The action supports multiple LLM providers. Set the `llm_provider` input (or `LLM_PROVIDER` env var) to choose one.
+
+### Gemini (default)
+
+```yaml
+- uses: Stone-IT-Cloud/gemini-code-review-action@v1
+  with:
+    llm_provider: gemini
+    gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+    model: gemini-2.5-flash
+```
+
+### OpenRouter (any model from 300+ providers)
+
+[OpenRouter](https://openrouter.ai) gives you access to 300+ models (OpenAI, Anthropic, Google, Meta, Mistral, DeepSeek, Qwen, etc.) through a single API.
+
+```yaml
+- uses: Stone-IT-Cloud/gemini-code-review-action@v1
+  with:
+    llm_provider: openai
+    openai_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+    model: openai/gpt-4o          # Any OpenRouter model slug
+    openai_base_url: https://openrouter.ai/api/v1  # Default, can omit
+```
+
+To use any model from OpenRouter, just change the `model` parameter to the [model slug](https://openrouter.ai/models) you want:
+
+| Model | Slug |
+|-------|------|
+| GPT-4o | `openai/gpt-4o` |
+| Claude Sonnet 4 | `anthropic/claude-sonnet-4` |
+| Gemini 2.5 Flash | `google/gemini-2.5-flash` |
+| DeepSeek V3 | `deepseek/deepseek-chat` |
+| Llama 3.1 405B | `meta-llama/llama-3.1-405b` |
+| Mistral Large | `mistral/mistral-large` |
+| Qwen Turbo | `qwen/qwen-turbo` |
+
+### OpenAI Direct
+
+```yaml
+- uses: Stone-IT-Cloud/gemini-code-review-action@v1
+  with:
+    llm_provider: openai
+    openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+    model: gpt-4o
+    openai_base_url: https://api.openai.com/v1
+```
+
+### DeepSeek
+
+```yaml
+- uses: Stone-IT-Cloud/gemini-code-review-action@v1
+  with:
+    llm_provider: openai
+    openai_api_key: ${{ secrets.DEEPSEEK_API_KEY }}
+    model: deepseek-chat
+    openai_base_url: https://api.deepseek.com/v1
 ```
 
 ## Features
@@ -356,14 +422,98 @@ The source code follows the **Single Responsibility Principle (SRP)**, with each
 src/
 ├── main.py              # CLI entry point and orchestration
 ├── config.py            # Configuration and environment validation
-├── gemini_client.py     # Gemini AI API interactions
+├── gemini_client.py     # Backward-compat shim for Gemini
 ├── github_client.py     # GitHub API interactions (comments, PR data)
 ├── prompts.py           # Prompt templates for the AI model
 ├── quota.py             # Rate limiting and quota tracking
 ├── review_formatter.py  # Formatting review output for GitHub
 ├── review_parser.py     # Parsing structured JSON from AI responses
-└── utils.py             # General-purpose utilities
+├── utils.py             # General-purpose utilities
+├── learner.py           # Post-PR learning from human feedback
+├── review_memory.py     # Cross-PR review memory via Engram
+└── llm/                 # LLM provider abstraction layer
+    ├── __init__.py      # Module exports
+    ├── base.py          # LLMClient ABC + LLMConfig/LLMResponse
+    ├── provider_registry.py  # Provider registration and factory
+    ├── gemini_client.py # Gemini provider
+    ├── openai_client.py # OpenAI-compatible provider (OpenRouter, DeepSeek, etc.)
+    └── review.py        # Provider-agnostic review workflow (chunking, summarization)
 ```
+## Architecture: LLM Provider Abstraction
+
+The action uses a clean provider abstraction to support multiple LLM backends:
+
+```
+┌─────────────────────────────────────────────┐
+│  main.py  (orchestration, CLI)              │
+│    ↓ run_review(client, config)             │
+├─────────────────────────────────────────────┤
+│  src/llm/review.py  (chunking, budget,      │
+│                      summarization)          │
+│    ↓ client.generate_content(prompt, cfg)   │
+├─────────────────────────────────────────────┤
+│  LLMClient (ABC)  ←── OpenAIClient          │
+│                   ←── GeminiClient          │
+│                   ←── (your provider here)   │
+└─────────────────────────────────────────────┘
+```
+
+### How to add a new LLM provider
+
+Adding a new provider requires **one file and one import**:
+
+**1. Create the provider class** in `src/llm/<name>_client.py`:
+
+```python
+from src.llm.base import LLMClient, LLMConfig, LLMResponse
+from src.llm.provider_registry import register_provider
+
+class MyCustomClient(LLMClient):
+    @classmethod
+    def from_env(cls) -> MyCustomClient:
+        # Read API keys / config from environment
+        api_key = os.getenv("MY_API_KEY")
+        return cls(api_key)
+    
+    def generate_content(self, prompt: str, config: LLMConfig) -> LLMResponse:
+        # Send prompt to the API, return LLMResponse with text + usage
+        ...
+    
+    def get_context_limit(self, model: str) -> int:
+        # Return max tokens for this model
+        return 128_000
+
+register_provider("mycustom", MyCustomClient)
+```
+
+**2. Register in `src/llm/__init__.py`** — add one line:
+
+```python
+from src.llm import my_custom_client  # noqa: F401
+```
+
+**3. Configure via env vars:**
+
+```yaml
+- uses: Stone-IT-Cloud/gemini-code-review-action@v1
+  with:
+    llm_provider: mycustom
+    model: my-model-name
+```
+
+The rest (chunking, summarization, severity filtering, PR posting) is handled automatically.
+
+### Provider contract
+
+Each provider must implement:
+
+| Method | Purpose |
+|--------|---------|
+| `from_env()` | Classmethod factory. Reads env vars, returns configured client instance. |
+| `generate_content(prompt, config)` | Core method. Sends prompt to LLM, returns `LLMResponse(text, usage)`. |
+| `get_context_limit(model)` | Returns max input tokens for the model. Used for budget-based chunking. |
+
+The `LLMConfig` dataclass provides: `model`, `system_instruction`, `temperature`, `top_p`, `max_output_tokens`, `extra_kwargs`.
 
 ## Notes
 - This Action fetches PR comments using [PyGithub](https://github.com/PyGithub/PyGithub) and includes them in the model context to avoid redundant feedback and align with ongoing discussion.

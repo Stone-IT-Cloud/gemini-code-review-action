@@ -524,6 +524,27 @@ def main(
         logger.info(f"Learn complete: {result}")
         return
 
+    # ── Learn mode: analyse closed PR discussions ────────────────────
+    if mode == "learn":
+        from src.learner import _parse_pr_number, run as learner_run
+
+        pr_number = _parse_pr_number(None)
+        repo = os.getenv("GITHUB_REPOSITORY", "")
+        engram_dir = (
+            review_memory_path
+            or os.getenv("ENGRAM_DIR", "")
+            or ".engram"
+        )
+        result = learner_run(
+            github_token=os.getenv("GITHUB_TOKEN", ""),
+            repo=repo,
+            pr_number=pr_number,
+            engram_dir=engram_dir,
+            llm_client=client,          # LLM-based classification, falls back to keywords on error
+        )
+        logger.info(f"Learn complete: {result}")
+        return
+
     # Resolve CI-only env vars (only when not in local mode)
     comments_text = ""
     _github_token = ""

@@ -307,3 +307,136 @@ class TestHandleApiError:
             fail_fast_on_no_quota=False,
         )
         assert result is False
+
+
+# ---------------------------------------------------------------------------
+# _process_single_chunk — chunked API call config
+# ---------------------------------------------------------------------------
+
+
+class TestProcessSingleChunkConfig:
+    """Tests for config plumbing in _process_single_chunk and _process_chunks."""
+
+    def test_process_single_chunk_receives_llm_config(self, mocker):
+        """R3/R4: _process_single_chunk accepts and passes config to API call."""
+        mock_tracker = MagicMock()
+        mock_tracker.has_all_quotas_set_to_zero.return_value = False
+        mocker.patch("src.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
+
+        client = MagicMock()
+        gc = GeminiClient(client)
+        mocker.patch.object(gc, "get_context_limit", return_value=1_000_000)
+        mocker.patch("src.llm.gemini_client.calculate_char_budget", return_value=10)
+
+        llm_config = MagicMock()
+        llm_config.system_instruction = "You are a code reviewer."
+        llm_config.temperature = 0.1
+        llm_config.top_p = 0.95
+        llm_config.max_output_tokens = 8192
+        llm_config.model = "gemini-2.5-flash"
+
+        response = MagicMock()
+        response.text = "review output"
+        client.models.generate_content.return_value = response
+
+        # This call should work once the llm_config param is added
+        result = gc._process_single_chunk(
+            model="gemini-2.5-flash",
+            idx=1,
+            total=1,
+            chunked_diff="some diff",
+            comments_text="",
+            max_attempts=2,
+            initial_wait=0.01,
+            max_wait=0.1,
+            min_request_interval=0.0,
+            fail_fast_on_no_quota=False,
+            tracker=mock_tracker,
+            llm_config=llm_config,
+        )
+        assert result == "review output"
+
+        # Verify the API call included config with response_mime_type and system_instruction
+        call_kwargs = client.models.generate_content.call_args.kwargs
+        assert "config" in call_kwargs, "API call must include config"
+        config = call_kwargs["config"]
+        assert config.response_mime_type == "application/json"
+        assert config.system_instruction == "You are a code reviewer."
+
+    def test_process_chunks_forwards_llm_config(self, mocker):
+        """R5: _process_chunks forwards llm_config to _process_single_chunk."""
+        mock_tracker = MagicMock()
+        mock_tracker.has_all_quotas_set_to_zero.return_value = False
+        mocker.patch("src.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
+        mocker.patch("src.llm.gemini_client.calculate_char_budget", return_value=10)
+
+        client = MagicMock()
+        gc = GeminiClient(client)
+        mocker.patch.object(gc, "get_context_limit", return_value=1_000_000)
+
+        llm_config = MagicMock()
+        llm_config.system_instruction = "Review prompt"
+        llm_config.temperature = 0.1
+        llm_config.top_p = 0.95
+        llm_config.max_output_tokens = 8192
+        llm_config.model = "gemini-2.5-flash"
+
+        response = MagicMock()
+        response.text = "chunk result"
+        client.models.generate_content.return_value = response
+
+        # Spy on _process_single_chunk to verify it receives llm_config
+        spy = mocker.spy(gc, "_process_single_chunk")
+
+        gc._process_chunks(
+            model="gemini-2.5-flash",
+            chunked_diff_list=["chunk1", "chunk2"],
+            llm_config=llm_config,
+            comments_text="",
+        )
+
+        # Each call to _process_single_chunk should include llm_config
+        for call_args in spy.call_args_list:
+            assert "llm_config" in call_args.kwargs
+            assert call_args.kwargs["llm_config"] is llm_config
+
+    def test_generate_content_receives_config_with_system_instruction(self, mocker):
+        """R3/R4: SDK generate_content receives config with response_mime_type and system_instruction."""
+        mock_tracker = MagicMock()
+        mock_tracker.has_all_quotas_set_to_zero.return_value = False
+        mocker.patch("src.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
+
+        client = MagicMock()
+        gc = GeminiClient(client)
+        mocker.patch.object(gc, "get_context_limit", return_value=1_000_000)
+        mocker.patch("src.llm.gemini_client.calculate_char_budget", return_value=10)
+
+        llm_config = MagicMock()
+        llm_config.system_instruction = "You are an expert code reviewer."
+
+        response = MagicMock()
+        response.text = "review text"
+        client.models.generate_content.return_value = response
+
+        gc._process_single_chunk(
+            model="gemini-2.5-flash",
+            idx=1,
+            total=1,
+            chunked_diff="diff content",
+            comments_text="",
+            max_attempts=2,
+            initial_wait=0.01,
+            max_wait=0.1,
+            min_request_interval=0.0,
+            fail_fast_on_no_quota=False,
+            tracker=mock_tracker,
+            llm_config=llm_config,
+        )
+
+        call_args = client.models.generate_content.call_args
+        assert call_args is not None
+        kwargs = call_args.kwargs
+        assert "config" in kwargs
+        config = kwargs["config"]
+        assert config.response_mime_type == "application/json"
+        assert config.system_instruction == "You are an expert code reviewer."

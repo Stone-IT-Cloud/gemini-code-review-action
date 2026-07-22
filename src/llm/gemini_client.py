@@ -15,8 +15,6 @@ from __future__ import annotations
 
 import os
 import time
-from collections import deque
-from dataclasses import dataclass, field
 from typing import Any
 
 from google.genai import errors as gemini_errors
@@ -276,6 +274,7 @@ class GeminiClient(LLMClient):
                 min_request_interval=min_request_interval,
                 fail_fast_on_no_quota=fail_fast_on_no_quota,
                 tracker=tracker,
+                llm_config=llm_config,
             )
             if chunk_result is not None:
                 chunked_reviews.append(chunk_result)
@@ -312,6 +311,7 @@ class GeminiClient(LLMClient):
         min_request_interval: float,
         fail_fast_on_no_quota: bool,
         tracker: QuotaTracker,
+        llm_config: LLMConfig | None = None,
     ) -> str | None:
         """Process a single diff chunk with retry logic. Returns the review text or None."""
         for attempt in range(max_attempts):
@@ -329,14 +329,21 @@ class GeminiClient(LLMClient):
                 # reads those from the generate_content system_instruction.
                 prompt_parts.append("\n\nNow provide your review according to the earlier instructions.")
 
+                chunk_config = gemini_types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    system_instruction=llm_config.system_instruction if llm_config else None,
+                )
                 response = self._client.models.generate_content(
                     model=model,
                     contents="\n".join(prompt_parts),
+                    config=chunk_config,
                 )
                 now = time.time()
                 tracker.note_request(now)
                 review_result = _extract_model_text(response)
-                tracker.log_after_response(response, label=f"Gemini call success (review chunk {idx}/{total})", prefix="GEMINI")
+                tracker.log_after_response(
+                    response, label=f"Gemini call success (review chunk {idx}/{total})", prefix="GEMINI"
+                )
                 if review_result:
                     return review_result
             except gemini_errors.APIError as e:
@@ -352,7 +359,9 @@ class GeminiClient(LLMClient):
                 if should_retry:
                     continue
             except Exception as e:  # pylint: disable=broad-exception-caught
-                logger.error(f"Chunk {idx}/{total} attempt {attempt + 1}/{max_attempts} unexpected error: {_safe_str(e)}")
+                logger.error(
+                    f"Chunk {idx}/{total} attempt {attempt + 1}/{max_attempts} unexpected error: {_safe_str(e)}"
+                )
                 if attempt + 1 < max_attempts:
                     wait_time = min(max_wait, initial_wait * (2**attempt))
                     _sleep_with_jitter(wait_time)

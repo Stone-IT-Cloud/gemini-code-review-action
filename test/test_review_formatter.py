@@ -73,7 +73,7 @@ class TestBuildReviewSummary:
         result = build_review_summary(items, {"additions": 50, "deletions": 30, "files": 2})
         assert "📋 Review:" in result
         assert "+50 / -30" in result
-        assert "2 archivos" in result
+        assert "2 files" in result
         assert "🔴" in result
         assert "🟡" in result
         assert "🔵" in result
@@ -90,7 +90,7 @@ class TestBuildReviewSummary:
 
     def test_no_items(self):
         result = build_review_summary([], {"additions": 0, "deletions": 0, "files": 0})
-        assert "✅ No se encontraron issues" in result
+        assert "✅ No issues found" in result
 
     def test_single_critical(self):
         items = [{"severity": "critical", "comment": "Security hole"}]

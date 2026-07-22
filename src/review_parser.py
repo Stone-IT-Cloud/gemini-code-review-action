@@ -74,7 +74,9 @@ REVIEW_SYSTEM_PROMPT = (
     "put natural language descriptions, explanations, or advice in suggestion. "
     "Never use unified diff format (no ---, +++, @@, or +/- line prefixes). "
     "If you cannot provide a concrete code fix, omit suggestion or set it to null.\n"
-    "If you have no comments, return an empty JSON array: []\n"
+    "If you find no issues worthy of a review comment, produce a single item "
+    "with severity 'trivial', an empty file field, and a comment summarizing "
+    "what looks good and why the changes are acceptable.\n"
     "Do not add any text before or after the JSON array."
 )
 

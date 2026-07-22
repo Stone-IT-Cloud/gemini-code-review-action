@@ -349,8 +349,9 @@ class TestReviewSystemPrompt:
     def test_forbids_markdown(self):
         assert "Do not include any markdown" in REVIEW_SYSTEM_PROMPT
 
-    def test_mentions_empty_array(self):
-        assert "[]" in REVIEW_SYSTEM_PROMPT
+    def test_no_longer_mentions_empty_array(self):
+        """R2: Prompt MUST NOT contain any [] empty-output instruction."""
+        assert "[]" not in REVIEW_SYSTEM_PROMPT
 
     def test_suggestion_must_be_code_not_prose_or_diff(self):
         assert "exact replacement code" in REVIEW_SYSTEM_PROMPT

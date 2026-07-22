@@ -133,7 +133,7 @@ def _diff_stats_line(diff_stats: dict[str, int]) -> str:
     additions = diff_stats.get("additions", 0)
     deletions = diff_stats.get("deletions", 0)
     files = diff_stats.get("files", 0)
-    return f"📋 Review: +{additions} / -{deletions} líneas, {files} archivos"
+    return f"📋 Review: +{additions} / -{deletions} lines, {files} files"
 
 
 def build_review_summary(
@@ -151,8 +151,8 @@ def build_review_summary(
     """
     if not all_items:
         if diff_stats:
-            return f"{_diff_stats_line(diff_stats)}\n✅ No se encontraron issues."
-        return "✅ No se encontraron issues."
+            return f"{_diff_stats_line(diff_stats)}\n✅ No issues found."
+        return "✅ No issues found."
 
     counts, short_descriptions = _count_by_severity(all_items)
     lines = [_diff_stats_line(diff_stats) if diff_stats else "📋 Review"]

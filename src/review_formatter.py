@@ -131,8 +131,8 @@ def build_review_summary(
         if diff_stats:
             a, d = diff_stats.get("additions", 0), diff_stats.get("deletions", 0)
             f = diff_stats.get("files", 0)
-            return f"📋 Review: +{a} / -{d} líneas, {f} archivos\n✅ No se encontraron issues."
-        return "✅ No se encontraron issues."
+            return f"📋 Review: +{a} / -{d} lines, {f} files\n✅ No issues found."
+        return "✅ No issues found."
 
     # Count by severity
     counts: dict[str, int] = {}
@@ -152,7 +152,7 @@ def build_review_summary(
     if diff_stats:
         a, d = diff_stats.get("additions", 0), diff_stats.get("deletions", 0)
         f = diff_stats.get("files", 0)
-        lines.append(f"📋 Review: +{a} / -{d} líneas, {f} archivos")
+        lines.append(f"📋 Review: +{a} / -{d} lines, {f} files")
     else:
         lines.append("📋 Review")
 

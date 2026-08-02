@@ -19,15 +19,15 @@
 **Archivo:** `test/test_openai_client.py`
 
 ```python
-"""Tests for src/llm/openai_client.py — OpenAI-compatible provider."""
+"""Tests for code_reviewer/llm/openai_client.py — OpenAI-compatible provider."""
 
-from src.llm.openai_client import OpenAIClient
-from src.llm.base import LLMConfig
+from code_reviewer.llm.openai_client import OpenAIClient
+from code_reviewer.llm.base import LLMConfig
 
 
 def test_openai_client_is_registered():
     """OpenAI provider debe estar registrado."""
-    from src.llm import list_providers
+    from code_reviewer.llm import list_providers
     assert "openai" in list_providers()
 ```
 
@@ -35,7 +35,7 @@ def test_openai_client_is_registered():
 
 **GREEN** — implementación mínima.
 
-**Archivo:** `src/llm/openai_client.py`
+**Archivo:** `code_reviewer/llm/openai_client.py`
 
 - Clase `OpenAIClient(LLMClient)` con `from_env()`, `generate_content()`, `get_context_limit()`
 - `from_env()` lee `OPENAI_API_KEY` (o `LLM_API_KEY`) y `OPENAI_BASE_URL` (default `https://openrouter.ai/api/v1`)
@@ -56,7 +56,7 @@ def test_openai_client_is_registered():
 
 ## Task 4: Wire en __init__.py
 
-Agregar `from src.llm import openai_client` en `src/llm/__init__.py`.
+Agregar `from code_reviewer.llm import openai_client` en `code_reviewer/llm/__init__.py`.
 
 ## Task 5: Verificar full suite
 
@@ -72,7 +72,7 @@ Documentar uso de OpenRouter y OpenAI-compatible providers.
 
 | Archivo | Acción |
 |---|---|
-| `src/llm/openai_client.py` | **Crear** |
-| `src/llm/__init__.py` | Modificar (import openai_client) |
+| `code_reviewer/llm/openai_client.py` | **Crear** |
+| `code_reviewer/llm/__init__.py` | Modificar (import openai_client) |
 | `test/test_openai_client.py` | **Crear** |
 | `README.md` | Modificar |

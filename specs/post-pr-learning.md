@@ -98,15 +98,15 @@ jobs:
 
 ### Nuevos archivos
 
-- `src/learner.py` — lógica de análisis de discusiones post-PR
+- `code_reviewer/learner.py` — lógica de análisis de discusiones post-PR
 - `test/test_learner.py` — tests
 
 ### Cambios en archivos existentes
 
-- `src/main.py` — nuevo branch para `mode: "learn"`
+- `code_reviewer/main.py` — nuevo branch para `mode: "learn"`
 - `action.yml` — nuevo input `mode` (values: "review", "learn")
 
-### `src/learner.py`
+### `code_reviewer/learner.py`
 
 ```python
 def fetch_bot_comments(github_token, repo, pr_number) -> list[dict]:

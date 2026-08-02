@@ -17,7 +17,7 @@ review_level forzado por el usuario?
 
 ## Implementación
 
-**Archivo:** `src/main.py`, antes de la línea donde se determina `min_severity`.
+**Archivo:** `code_reviewer/main.py`, antes de la línea donde se determina `min_severity`.
 
 ```python
 # Auto-adjust review level based on diff size (unless user explicitly set it)
@@ -51,7 +51,7 @@ if not review_level and not os.getenv("REVIEW_LEVEL"):
 
 ## Archivos a modificar
 
-- `src/main.py` — lógica de auto-adjust
+- `code_reviewer/main.py` — lógica de auto-adjust
 - `test/test_review_level_cli.py` — nuevos tests TDD
 
 ## No-rompimiento

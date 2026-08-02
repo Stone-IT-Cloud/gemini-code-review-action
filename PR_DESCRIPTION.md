@@ -9,7 +9,7 @@
 
 ## Changes
 
-### 1. Inline suggestion validation (`src/review_parser.py`)
+### 1. Inline suggestion validation (`code_reviewer/review_parser.py`)
 
 - **System prompt:** Clarified that `suggestion` must be exact replacement code only; never prose or unified diff; omit or set to null if no concrete fix.
 - **New helpers:** `_looks_like_prose()`, `_extract_diff_additions()`, `_sanitize_suggestion()` — reject prose, normalize diff to added lines only, return `None` for invalid.
@@ -19,17 +19,17 @@
 
 ### 2. Pylint fixes (no disables)
 
-- **src/context/scanner.py:** Double-quoted strings; `PARSER_EXCEPTIONS` instead of broad `Exception`; `_read_file_limited` renamed to `read_file_limited`.
-- **src/github_client.py:** Variables in f-strings; `except (requests.RequestException, OSError)`.
-- **src/main.py:** Module-level `_ANSI` dict; `print_local_review` uses a `SimpleNamespace` for ANSI codes (attribute access in f-strings, no nested quotes).
+- **code_reviewer/context/scanner.py:** Double-quoted strings; `PARSER_EXCEPTIONS` instead of broad `Exception`; `_read_file_limited` renamed to `read_file_limited`.
+- **code_reviewer/github_client.py:** Variables in f-strings; `except (requests.RequestException, OSError)`.
+- **code_reviewer/main.py:** Module-level `_ANSI` dict; `print_local_review` uses a `SimpleNamespace` for ANSI codes (attribute access in f-strings, no nested quotes).
 - **Tests:** Unused import removed, `assert not result` / `assert not parse_review_response(...)`, `read_file_limited`, double-quoted strings, `*mocks` for too many args, `_mock_*` for unused args.
 
 ### 3. Default model and docs
 
-- **Default model:** `gpt-3.5-turbo` / `text-davinci-003` → **`gemini-2.5-flash`** in `src/main.py`, `action.yml`, README, `.github/workflows/test-action.yml`, and test examples.
+- **Default model:** `gpt-3.5-turbo` / `text-davinci-003` → **`gemini-2.5-flash`** in `code_reviewer/main.py`, `action.yml`, README, `.github/workflows/test-action.yml`, and test examples.
 - **action.yml:** Descriptions updated (e.g. "Gemini model name", "Extra prompt for Gemini").
 
-### 4. Python < 3.12 compatibility (`src/main.py`)
+### 4. Python < 3.12 compatibility (`code_reviewer/main.py`)
 
 - **Local review output:** Replaced f-strings with nested double-quoted dict keys (e.g. `f"{a["BOLD"]}"`) by a `SimpleNamespace` built from `_ANSI` with lowercase keys (`c.bold`, `c.cyan`, etc.). F-strings now use attribute access only (e.g. `f"{c.bold}{c.cyan}"`), so no nested quotes and no SyntaxError on Python 3.11 and below (PEP 701).
 
@@ -43,10 +43,10 @@
 - `README.md`
 - `.github/workflows/test-action.yml`
 - `scripts/test-docker-local.sh` (new)
-- `src/context/scanner.py`
-- `src/github_client.py`
-- `src/main.py`
-- `src/review_parser.py`
+- `code_reviewer/context/scanner.py`
+- `code_reviewer/github_client.py`
+- `code_reviewer/main.py`
+- `code_reviewer/review_parser.py`
 - `test/test_context_scanner.py`
 - `test/test_github_inline_comments.py`
 - `test/test_inline_suggestions.py`

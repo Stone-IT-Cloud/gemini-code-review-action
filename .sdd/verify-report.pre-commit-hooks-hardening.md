@@ -31,28 +31,28 @@ build_output_hash: sha256:7bdd09f914e38dc52b44d030d87b90b27816cb387a38b2b61f4d75
 
 **ruff**: ✅ Passed
 ```text
-ruff check src/ test/ → exit 0
+ruff check code_reviewer/ test/ → exit 0
 ```
 
 **black**: ✅ Passed
 ```text
-black --check src/ test/ → exit 0 (37 files unchanged)
+black --check code_reviewer/ test/ → exit 0 (37 files unchanged)
 ```
 
 **mypy**: ✅ Passed
 ```text
-mypy src/ → exit 0 (no issues found)
+mypy code_reviewer/ → exit 0 (no issues found)
 ```
 
 **xenon**: ❌ Failed (pre-existing)
 ```text
-xenon --max-absolute B --max-modules B --max-average A src/ → exit 1
+xenon --max-absolute B --max-modules B --max-average A code_reviewer/ → exit 1
 8 C-ranked blocks, 2 C-ranked modules (all pre-existing, not introduced by change)
 ```
 
 **bandit**: ✅ Passed
 ```text
-bandit -r src -c pyproject.toml → exit 0 (no issues)
+bandit -r code_reviewer -c pyproject.toml → exit 0 (no issues)
 ```
 
 **Tests**: ⚠️ 217 passed / 1 failed / 5 errors
@@ -68,18 +68,18 @@ PYTHONPATH=. pytest test/ -v --tb=short
 
 | Requirement | Scenario | Test | Result |
 |-------------|----------|------|--------|
-| REQ-TOOLCONF | Tool configs are discoverable | `black --check src/`, `mypy -p src`, `ruff check src/`, `bandit -r src` | ✅ COMPLIANT — all read from pyproject.toml without extra CLI flags |
+| REQ-TOOLCONF | Tool configs are discoverable | `black --check code_reviewer/`, `mypy -p code_reviewer`, `ruff check code_reviewer/`, `bandit -r code_reviewer` | ✅ COMPLIANT — all read from pyproject.toml without extra CLI flags |
 | REQ-TOOLCONF | Config is a single source of truth | `.pylintrc` deleted | ✅ COMPLIANT — .pylintrc removed, rules consolidated in pyproject.toml |
 | REQ-HOOKS | All hooks registered and ordered correctly | `pre-commit run --all-files` | ⚠️ PARTIAL — all hooks present, pylint+isort removed. Order: ruff before black (spec says "black runs first" — design intentionally reversed) |
 | REQ-HOOKS | pylint config cleanup | `.pylintrc` exists | ✅ COMPLIANT — .pylintrc deleted |
-| REQ-QUALITY-GATE | black passes | `black --check src/ test/` | ✅ COMPLIANT — exit 0 |
-| REQ-QUALITY-GATE | ruff passes | `ruff check src/ test/` | ✅ COMPLIANT — exit 0 |
-| REQ-QUALITY-GATE | mypy passes on source | `mypy src/` | ✅ COMPLIANT — exit 0 |
-| REQ-QUALITY-GATE | xenon passes | `xenon --max-absolute B --max-modules B --max-average A src/` | ❌ FAILING — exit 1 (8 pre-existing C-ranked blocks; the 3 spec-targeted functions are A/B) |
-| REQ-QUALITY-GATE | bandit passes | `bandit -r src -c pyproject.toml` | ✅ COMPLIANT — no HIGH/MEDIUM issues |
+| REQ-QUALITY-GATE | black passes | `black --check code_reviewer/ test/` | ✅ COMPLIANT — exit 0 |
+| REQ-QUALITY-GATE | ruff passes | `ruff check code_reviewer/ test/` | ✅ COMPLIANT — exit 0 |
+| REQ-QUALITY-GATE | mypy passes on source | `mypy code_reviewer/` | ✅ COMPLIANT — exit 0 |
+| REQ-QUALITY-GATE | xenon passes | `xenon --max-absolute B --max-modules B --max-average A code_reviewer/` | ❌ FAILING — exit 1 (8 pre-existing C-ranked blocks; the 3 spec-targeted functions are A/B) |
+| REQ-QUALITY-GATE | bandit passes | `bandit -r code_reviewer -c pyproject.toml` | ✅ COMPLIANT — no HIGH/MEDIUM issues |
 | REQ-NO-BEHAVIOR-CHANGE | Tests pass unchanged | `pytest test/` | ⚠️ PARTIAL — 217 pass, 1 fail + 5 errors (all pre-existing, same before/after) |
 | REQ-NO-BEHAVIOR-CHANGE | MyPy fixes are type-only | Code review | ✅ COMPLIANT — typing.NotRequired, type guards, `# type: ignore` comments only |
-| REQ-RULE-RELAXATION | No src rule suppressed without reason | pyproject.toml comments | ✅ COMPLIANT — `src/main.py` ignores documented with justifications |
+| REQ-RULE-RELAXATION | No code_reviewer rule suppressed without reason | pyproject.toml comments | ✅ COMPLIANT — `code_reviewer/main.py` ignores documented with justifications |
 | REQ-RULE-RELAXATION | Bandit B101 suppressed for tests only | bandit config | ✅ COMPLIANT — test/ excluded, B101 skip documented |
 
 **Compliance summary**: 8/10 scenarios compliant, 2 partial, 1 failing (xenon pre-existing)
@@ -92,7 +92,7 @@ PYTHONPATH=. pytest test/ -v --tb=short
 | REQ-HOOKS | ✅ Implemented | ruff (--fix), black, mypy (+types-requests), xenon (B/B/A), bandit (+pyproject.toml), pre-commit-hooks (3), actionlint, hadolint. pylint/isort removed. |
 | REQ-QUALITY-GATE | ⚠️ Blocked on xenon | ruff, black, mypy, bandit pass. xenon fails on 8 pre-existing C-ranked blocks (spec-targeted functions refactored to A/B). actionlint-docker fails (Docker daemon I/O — infrastructure). |
 | REQ-NO-BEHAVIOR-CHANGE | ✅ Implemented | All 217 previously passing tests still pass. 1 failure + 5 errors pre-exist. |
-| REQ-RULE-RELAXATION | ✅ Implemented | Per-file-ignores: `src/main.py` (T201, S101, S603, S607, S605 with comments), `test/**/*.py` (D, S101, S106, RUF003). No `src/review_parser.py` C901 — resolved by refactoring. |
+| REQ-RULE-RELAXATION | ✅ Implemented | Per-file-ignores: `code_reviewer/main.py` (T201, S101, S603, S607, S605 with comments), `test/**/*.py` (D, S101, S106, RUF003). No `code_reviewer/review_parser.py` C901 — resolved by refactoring. |
 
 ### Coherence (Design)
 
@@ -103,12 +103,12 @@ PYTHONPATH=. pytest test/ -v --tb=short
 | AD3: xenon thresholds | ⚠️ Stricter | Design: C/C/B. Actual: B/B/A (more strict). Causes pre-existing blocks to fail. |
 | Hook order (ruff → black → mypy → xenon → bandit) | ✅ Yes | Matches design intent (ruff before black so import sorting then formatting) |
 | black line-length=120 | ✅ Yes | Design value (spec had 88) |
-| `typing.NotRequired` (not `typing_extensions`) | ✅ Yes | `src/config.py` uses `from typing import NotRequired`. `typing_extensions` unused in src/. |
+| `typing.NotRequired` (not `typing_extensions`) | ✅ Yes | `code_reviewer/config.py` uses `from typing import NotRequired`. `typing_extensions` unused in code_reviewer/. |
 | Complexity refactoring: `print_local_review` D→A | ✅ Yes | Extracted 7 helpers, CC D-30 → A-5 |
 | Complexity refactoring: `main()` D→B | ✅ Yes | Extracted 6 helpers, CC D-23 → B-6 |
 | Complexity refactoring: `_sanitize_suggestion` D→A | ✅ Yes | Extracted DiffFormat enum + 4 helpers, CC D-23 → A-5 |
 | Complexity refactoring: `get_context_summary` D→A | ✅ Yes | Extracted 3 methods, CC D-27 → A-5 |
-| Makefile lint-python → ruff | ✅ Yes | Updated from pylint to `ruff check src/` |
+| Makefile lint-python → ruff | ✅ Yes | Updated from pylint to `ruff check code_reviewer/` |
 | requirements-dev.txt updated | ✅ Yes | Added ruff, black, mypy, bandit, xenon, types-requests |
 
 ### Issues Found

@@ -43,20 +43,20 @@ rtk pip list            rtk pnpm install        rtk npm run <script>
 
 ## LLM Provider Architecture
 
-The action supports multiple LLM providers via a clean abstraction layer in `src/llm/`:
+The action supports multiple LLM providers via a clean abstraction layer in `code_reviewer/llm/`:
 
-- **`src/llm/base.py`**: `LLMClient` ABC — implement `generate_content()` and `get_context_limit()`
-- **`src/llm/provider_registry.py`**: `register_provider(name, class)` + `get_llm_client(provider)`
-- **`src/llm/review.py`**: `run_review(client, config)` — provider-agnostic chunking + summarization
-- **`src/llm/gemini_client.py`**: Gemini via `google.genai` SDK
-- **`src/llm/openai_client.py`**: OpenAI-compatible (OpenRouter, DeepSeek, etc.) via `requests`
+- **`code_reviewer/llm/base.py`**: `LLMClient` ABC — implement `generate_content()` and `get_context_limit()`
+- **`code_reviewer/llm/provider_registry.py`**: `register_provider(name, class)` + `get_llm_client(provider)`
+- **`code_reviewer/llm/review.py`**: `run_review(client, config)` — provider-agnostic chunking + summarization
+- **`code_reviewer/llm/gemini_client.py`**: Gemini via `google.genai` SDK
+- **`code_reviewer/llm/openai_client.py`**: OpenAI-compatible (OpenRouter, DeepSeek, etc.) via `requests`
 
 ### Adding a new provider
 
 ```python
-# src/llm/myclient.py
-from src.llm.base import LLMClient, LLMConfig, LLMResponse
-from src.llm.provider_registry import register_provider
+# code_reviewer/llm/myclient.py
+from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
+from code_reviewer.llm.provider_registry import register_provider
 
 class MyClient(LLMClient):
     @classmethod
@@ -67,7 +67,7 @@ class MyClient(LLMClient):
 register_provider("myclient", MyClient)
 ```
 
-Then add `from src.llm import myclient` to `src/llm/__init__.py`.
+Then add `from code_reviewer.llm import myclient` to `code_reviewer/llm/__init__.py`.
 
 ### Provider env vars
 

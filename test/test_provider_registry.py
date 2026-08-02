@@ -9,7 +9,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Tests for src/llm/provider_registry.py — provider registration and factory."""
+"""Tests for code_reviewer/llm/provider_registry.py — provider registration and factory."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.llm.base import LLMClient, LLMConfig, LLMResponse
-from src.llm.provider_registry import get_llm_client, list_providers, register_provider
+from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
+from code_reviewer.llm.provider_registry import get_llm_client, list_providers, register_provider
 
 
 # ── Mock provider for testing ───────────────────────────────────────────────
@@ -71,8 +71,8 @@ class TestProviderRegistry:
 
         # Re-import with clean env to test the default
         with patch.dict("os.environ", {}, clear=True):
-            importlib.reload(__import__("src.llm.provider_registry"))
-            from src.llm.provider_registry import get_llm_client as glic
+            importlib.reload(__import__("code_reviewer.llm.provider_registry"))
+            from code_reviewer.llm.provider_registry import get_llm_client as glic
 
             with pytest.raises(ValueError, match=r".*gemini.*"):  # no GEMINI_API_KEY
                 glic()

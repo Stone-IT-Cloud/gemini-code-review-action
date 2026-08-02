@@ -21,16 +21,16 @@ from google.genai import errors as gemini_errors
 from google.genai import types as gemini_types
 from loguru import logger
 
-from src.llm.base import LLMClient, LLMConfig, LLMResponse
-from src.llm.provider_registry import register_provider
-from src.prompts import get_review_prompt, get_summarize_prompt
-from src.quota import QuotaTracker
-from src.utils import _extract_model_text, _get_usage_metadata, _safe_str, calculate_char_budget, chunk_string
+from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
+from code_reviewer.llm.provider_registry import register_provider
+from code_reviewer.prompts import get_review_prompt, get_summarize_prompt
+from code_reviewer.quota import QuotaTracker
+from code_reviewer.utils import _extract_model_text, _get_usage_metadata, _safe_str, calculate_char_budget, chunk_string
 
 DEFAULT_TOKEN_LIMIT = 1_000_000
 
 
-# ── Gemini-specific error handling (moved from src/quota.py) ────────────────
+# ── Gemini-specific error handling (moved from code_reviewer/quota.py) ────────────────
 
 
 class NoQuotaAvailableError(RuntimeError):

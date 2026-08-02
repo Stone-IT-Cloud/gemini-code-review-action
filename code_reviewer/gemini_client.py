@@ -11,24 +11,24 @@
 #  limitations under the License.
 """Backward-compatible re-exports for the Gemini client.
 
-New code should import from ``src.llm`` and use the provider abstraction.
+New code should import from ``code_reviewer.llm`` and use the provider abstraction.
 This file remains for backward compatibility with any external code
-that imports directly from ``src.gemini_client``.
+that imports directly from ``code_reviewer.gemini_client``.
 """
 
 # ruff: noqa: F401
 
 from typing import Any
 
-from src.llm.gemini_client import (
+from code_reviewer.llm.gemini_client import (
     DEFAULT_TOKEN_LIMIT,
     GeminiClient,
     NoQuotaAvailableError,
     _handle_api_error,
     _looks_like_daily_quota_exhausted,
 )
-from src.quota import QuotaTracker
-from src.utils import calculate_char_budget, chunk_string
+from code_reviewer.quota import QuotaTracker
+from code_reviewer.utils import calculate_char_budget, chunk_string
 
 
 def get_review(client: Any, config: dict) -> tuple[list[str], str]:

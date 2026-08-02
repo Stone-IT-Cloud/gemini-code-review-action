@@ -14,7 +14,7 @@
 import re
 from typing import Any
 
-from src.context.parsers.base_parser import BaseParser
+from code_reviewer.context.parsers.base_parser import BaseParser
 
 
 def _parse_require_block(content: str) -> list[str]:

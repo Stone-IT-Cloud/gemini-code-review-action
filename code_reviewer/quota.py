@@ -13,7 +13,7 @@
 
 Provider-agnostic: the ``QuotaTracker`` works with any LLM provider.
 Per-provider error handling (``_handle_api_error``) lives in the
-respective provider module (e.g. ``src/llm/gemini_client.py``).
+respective provider module (e.g. ``code_reviewer/llm/gemini_client.py``).
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 
-from src.utils import _get_usage_metadata, _safe_str
+from code_reviewer.utils import _get_usage_metadata, _safe_str
 
 
 @dataclass

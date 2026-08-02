@@ -16,7 +16,7 @@ from typing import Any
 
 from loguru import logger
 
-from src.context.parsers import (
+from code_reviewer.context.parsers import (
     DockerComposeParser,
     DockerParser,
     DotNetParser,

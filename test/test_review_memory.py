@@ -9,13 +9,13 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Tests for src/review_memory.py — Engram-backed cross-PR review memory."""
+"""Tests for code_reviewer/review_memory.py — Engram-backed cross-PR review memory."""
 
 import json
 import os
 import tempfile
 
-from src.review_memory import (
+from code_reviewer.review_memory import (
     _content_hash,
     _fts_terms,
     build_context,
@@ -355,7 +355,7 @@ class TestBuildContext:
 
 
 class TestReviewSystemPromptNewSections:
-    from src.review_parser import REVIEW_SYSTEM_PROMPT
+    from code_reviewer.review_parser import REVIEW_SYSTEM_PROMPT
 
     def test_mentions_all_context(self):
         assert "Consider ALL available context" in self.REVIEW_SYSTEM_PROMPT

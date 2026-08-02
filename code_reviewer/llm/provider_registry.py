@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
-    from src.llm.base import LLMClient
+    from code_reviewer.llm.base import LLMClient
 
 _PROVIDERS: dict[str, type[LLMClient]] = {}
 

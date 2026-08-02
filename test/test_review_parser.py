@@ -11,7 +11,7 @@
 #  limitations under the License.
 import json
 
-from src.review_parser import (
+from code_reviewer.review_parser import (
     REVIEW_SYSTEM_PROMPT,
     _sanitize_suggestion,
     _validate_review_item,

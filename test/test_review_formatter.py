@@ -11,7 +11,7 @@
 #  limitations under the License.
 """Tests for structured review summary in review_formatter.py."""
 
-from src.review_formatter import _parse_diff_stats, build_review_summary
+from code_reviewer.review_formatter import _parse_diff_stats, build_review_summary
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ class TestBuildReviewSummary:
 
 class TestFormatReviewCommentWithSummary:
     def test_summary_prepended(self):
-        from src.review_formatter import format_review_comment
+        from code_reviewer.review_formatter import format_review_comment
 
         result = format_review_comment(
             summarized_review="Summary text",
@@ -134,7 +134,7 @@ class TestFormatReviewCommentWithSummary:
         assert "🔴 1 CRITICAL" in result
 
     def test_summary_not_added_when_no_diff_provided(self):
-        from src.review_formatter import format_review_comment
+        from code_reviewer.review_formatter import format_review_comment
 
         result = format_review_comment(
             summarized_review="Summary text",
@@ -149,8 +149,8 @@ class TestFormatReviewCommentWithSummary:
     def test_fallback_parses_summarized_review_json(self):
         """When items fail validation but summarized_review has valid JSON,
         the fallback in any_parsed branch should parse and format them."""
-        from src.review_formatter import format_review_comment
-        from src.review_parser import _validate_review_item
+        from code_reviewer.review_formatter import format_review_comment
+        from code_reviewer.review_parser import _validate_review_item
 
         # Craft JSON that's valid but items fail validation (empty comment)
         chunk = '[{"file": "a.py", "line": 1, "severity": "trivial", "comment": ""}]'
@@ -171,7 +171,7 @@ class TestFormatReviewCommentWithSummary:
 
     def test_clean_message_when_no_issues(self):
         """When there are no valid items, show a clean message instead of raw JSON."""
-        from src.review_formatter import format_review_comment
+        from code_reviewer.review_formatter import format_review_comment
 
         result = format_review_comment(
             summarized_review='[]',

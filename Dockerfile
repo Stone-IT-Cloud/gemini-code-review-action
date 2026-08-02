@@ -26,10 +26,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application source
-COPY src/ ./src/
+COPY code_reviewer/ ./code_reviewer/
 
-# Ensure Python finds the action's src package when container runs with -w GITHUB_WORKSPACE
+# Ensure Python finds the action's code_reviewer package when container runs with -w GITHUB_WORKSPACE
 ENV PYTHONPATH=/app
 
-# Support both CI and local modes by allowing arguments to be passed
-ENTRYPOINT ["python", "-m", "src.main"]
+# Support both CI and local modes by allowing arguments to be passed.
+# -P (safe-path) keeps CWD off sys.path so a reviewed repo's own modules
+# cannot shadow the action's package.
+ENTRYPOINT ["python", "-P", "-m", "code_reviewer.main"]

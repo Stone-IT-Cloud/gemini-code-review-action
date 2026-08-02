@@ -26,8 +26,8 @@ from typing import Any
 import requests
 from loguru import logger
 
-from src.llm.base import LLMClient, LLMConfig, LLMResponse
-from src.llm.provider_registry import register_provider
+from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
+from code_reviewer.llm.provider_registry import register_provider
 
 DEFAULT_TOKEN_LIMIT = 200_000
 ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1"

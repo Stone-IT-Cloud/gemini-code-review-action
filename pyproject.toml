@@ -48,13 +48,14 @@ convention = "google"
 # S101: Assert guards for env vars already validated by check_required_env_vars()
 # S603/S607: git subprocess commands use validated click.Path args (trust boundary clear)
 # S605: os.popen replaced with os.listdir/stat (fix applied, rule kept for any residual usage)
-"src/main.py" = ["T201", "S101", "S603", "S607", "S605"]
+"code_reviewer/main.py" = ["T201", "S101", "S603", "S607", "S605"]
 # Test files: pytest idiom uses assert (S101), docstrings optional (D), type annotations not required (ANN),
-# hardcoded tokens for test fixtures (S106), ambiguous unicode in test strings (RUF003)
-"test/**/*.py" = ["D", "S101", "S106", "RUF003"]
+# hardcoded tokens for test fixtures (S106), ambiguous unicode in test strings (RUF003),
+# subprocess used by rename-integrity guardrail with fixed args (S603/S607 — no shell, no untrusted input)
+"test/**/*.py" = ["D", "S101", "S106", "RUF003", "S603", "S607"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["src"]
+known-first-party = ["code_reviewer"]
 
 [tool.mypy]
 python_version = "3.12"

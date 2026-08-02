@@ -11,6 +11,6 @@
 #  limitations under the License.
 """Context scanning module for polyglot project analysis."""
 
-from src.context.scanner import ContextScanner
+from code_reviewer.context.scanner import ContextScanner
 
 __all__ = ["ContextScanner"]

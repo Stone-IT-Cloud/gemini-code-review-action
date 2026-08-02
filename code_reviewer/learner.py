@@ -26,8 +26,8 @@ from typing import Any
 import requests
 from loguru import logger
 
-from src.llm import LLMClient, LLMConfig
-from src.review_memory import ensure_engram, store_decisions_batch
+from code_reviewer.llm import LLMClient, LLMConfig
+from code_reviewer.review_memory import ensure_engram, store_decisions_batch
 
 # ── Keywords used when no LLM is available (fallback) ──────────────────────
 

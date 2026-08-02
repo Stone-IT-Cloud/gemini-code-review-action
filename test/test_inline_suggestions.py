@@ -11,8 +11,8 @@
 #  limitations under the License.
 import json
 
-from src.review_formatter import format_review_comment
-from src.review_parser import REVIEW_SYSTEM_PROMPT, _validate_review_item, parse_review_response
+from code_reviewer.review_formatter import format_review_comment
+from code_reviewer.review_parser import REVIEW_SYSTEM_PROMPT, _validate_review_item, parse_review_response
 
 # ---------------------------------------------------------------------------
 # _validate_review_item - suggestion field validation

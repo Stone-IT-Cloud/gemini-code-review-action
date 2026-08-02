@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import os
 
-from src.llm.openai_client import OpenAIClient
-from src.llm.provider_registry import register_provider
+from code_reviewer.llm.openai_client import OpenAIClient
+from code_reviewer.llm.provider_registry import register_provider
 
 # ── Base URLs ───────────────────────────────────────────────────────────────
 

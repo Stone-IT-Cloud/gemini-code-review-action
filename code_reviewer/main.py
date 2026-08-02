@@ -21,18 +21,18 @@ import click
 from github.GithubException import GithubException
 from loguru import logger
 
-from src.config import AiReviewConfig, check_required_env_vars
-from src.llm import get_llm_client
-from src.llm.review import run_review
-from src.github_client import (
+from code_reviewer.config import AiReviewConfig, check_required_env_vars
+from code_reviewer.llm import get_llm_client
+from code_reviewer.llm.review import run_review
+from code_reviewer.github_client import (
     create_a_comment_to_pull_request,
     create_inline_review_comments,
     get_all_pr_comments_text,
     write_github_output,
 )
-from src.prompts import get_review_prompt
-from src.review_formatter import filter_by_severity, format_review_comment
-from src.review_parser import parse_review_response
+from code_reviewer.prompts import get_review_prompt
+from code_reviewer.review_formatter import filter_by_severity, format_review_comment
+from code_reviewer.review_parser import parse_review_response
 
 # ANSI color codes for local review output (module-level to reduce locals in print_local_review)
 _ANSI = {
@@ -510,7 +510,7 @@ def main(
 
     # ── Learn mode: analyse closed PR discussions ────────────────────
     if mode == "learn":
-        from src.learner import _parse_pr_number, run as learner_run
+        from code_reviewer.learner import _parse_pr_number, run as learner_run
 
         pr_number = _parse_pr_number(None)
         repo = os.getenv("GITHUB_REPOSITORY", "")
@@ -531,7 +531,7 @@ def main(
 
     # ── Learn mode: analyse closed PR discussions ────────────────────
     if mode == "learn":
-        from src.learner import _parse_pr_number, run as learner_run
+        from code_reviewer.learner import _parse_pr_number, run as learner_run
 
         pr_number = _parse_pr_number(None)
         repo = os.getenv("GITHUB_REPOSITORY", "")
@@ -572,7 +572,7 @@ def main(
         # The action reads/writes the SQLite DB using Python stdlib only.
         if engram_enabled and engram_dir:
             try:
-                from src.review_memory import (
+                from code_reviewer.review_memory import (
                     build_context,
                     ensure_engram,
                     load_decisions,
@@ -674,7 +674,7 @@ def main(
     # whether similar feedback was already discussed.
     if engram_enabled and engram_dir and filtered_items:
         try:
-            from src.review_memory import store_decisions_batch
+            from code_reviewer.review_memory import store_decisions_batch
 
             pending = [
                 {

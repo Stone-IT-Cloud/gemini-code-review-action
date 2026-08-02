@@ -14,7 +14,7 @@
 import json
 from typing import Any
 
-from src.context.parsers.base_parser import BaseParser
+from code_reviewer.context.parsers.base_parser import BaseParser
 
 
 def _parse_json_safe(content: str) -> dict[str, Any] | None:

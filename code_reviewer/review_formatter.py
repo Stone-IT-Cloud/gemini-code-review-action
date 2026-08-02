@@ -16,8 +16,8 @@ import re
 
 from loguru import logger
 
-from src.review_parser import parse_review_response, strip_markdown_fences
-from src.utils import create_suggestion_fence
+from code_reviewer.review_parser import parse_review_response, strip_markdown_fences
+from code_reviewer.utils import create_suggestion_fence
 
 # Severity mapping for filtering
 SEVERITY_MAP = {"trivial": 1, "important": 2, "critical": 3}
@@ -196,7 +196,7 @@ def format_review_comment(
         # Valid JSON was received but individual items failed validation.
         # Try parsing summarized_review as a fallback source of items.
         if summarized_review.strip().startswith("[") or summarized_review.strip().startswith("{"):
-            from src.review_parser import parse_review_response
+            from code_reviewer.review_parser import parse_review_response
 
             fallback_items = parse_review_response(summarized_review)
             if fallback_items and min_severity:

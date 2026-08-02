@@ -9,9 +9,9 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Tests for src/utils.py — utility functions."""
+"""Tests for code_reviewer/utils.py — utility functions."""
 
-from src.utils import CHAR_PER_TOKEN_ESTIMATE, calculate_char_budget
+from code_reviewer.utils import CHAR_PER_TOKEN_ESTIMATE, calculate_char_budget
 
 # ---------------------------------------------------------------------------
 # calculate_char_budget

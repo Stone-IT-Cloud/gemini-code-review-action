@@ -11,15 +11,15 @@
 #  limitations under the License.
 """LLM provider abstraction layer — multi-model support for code review."""
 
-from src.llm.base import LLMClient, LLMConfig, LLMResponse
-from src.llm.provider_registry import get_llm_client, list_providers, register_provider
+from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
+from code_reviewer.llm.provider_registry import get_llm_client, list_providers, register_provider
 
 # Import provider modules to trigger register_provider() calls at module level.
 # Each provider module calls register_provider() at import time.
-from src.llm import gemini_client  # noqa: F401
-from src.llm import openai_client  # noqa: F401
-from src.llm import chinese_providers  # noqa: F401
-from src.llm import anthropic_client  # noqa: F401
+from code_reviewer.llm import gemini_client  # noqa: F401
+from code_reviewer.llm import openai_client  # noqa: F401
+from code_reviewer.llm import chinese_providers  # noqa: F401
+from code_reviewer.llm import anthropic_client  # noqa: F401
 
 __all__ = [
     "LLMClient",

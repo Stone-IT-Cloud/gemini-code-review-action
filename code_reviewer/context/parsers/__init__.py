@@ -11,18 +11,22 @@
 #  limitations under the License.
 """Parsers package for configuration file parsing."""
 
-from src.context.parsers.docker_parser import DockerComposeParser, DockerParser
-from src.context.parsers.dotnet_parser import DotNetParser
-from src.context.parsers.golang_parser import GolangParser
-from src.context.parsers.helm_parser import HelmParser
-from src.context.parsers.java_parser import GradleParser, MavenParser
-from src.context.parsers.javascript_parser import JavaScriptParser
-from src.context.parsers.kubernetes_parser import KubernetesParser
-from src.context.parsers.php_parser import PHPParser
-from src.context.parsers.python_parser import PythonPipfileParser, PythonPyprojectParser, PythonRequirementsParser
-from src.context.parsers.ruby_parser import RubyParser
-from src.context.parsers.rust_parser import RustParser
-from src.context.parsers.terraform_parser import TerraformParser
+from code_reviewer.context.parsers.docker_parser import DockerComposeParser, DockerParser
+from code_reviewer.context.parsers.dotnet_parser import DotNetParser
+from code_reviewer.context.parsers.golang_parser import GolangParser
+from code_reviewer.context.parsers.helm_parser import HelmParser
+from code_reviewer.context.parsers.java_parser import GradleParser, MavenParser
+from code_reviewer.context.parsers.javascript_parser import JavaScriptParser
+from code_reviewer.context.parsers.kubernetes_parser import KubernetesParser
+from code_reviewer.context.parsers.php_parser import PHPParser
+from code_reviewer.context.parsers.python_parser import (
+    PythonPipfileParser,
+    PythonPyprojectParser,
+    PythonRequirementsParser,
+)
+from code_reviewer.context.parsers.ruby_parser import RubyParser
+from code_reviewer.context.parsers.rust_parser import RustParser
+from code_reviewer.context.parsers.terraform_parser import TerraformParser
 
 __all__ = [
     "DockerComposeParser",

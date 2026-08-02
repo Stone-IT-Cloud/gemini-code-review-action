@@ -26,11 +26,11 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from src.prompts import get_review_prompt, get_summarize_prompt
-from src.utils import calculate_char_budget, chunk_string, _safe_str
+from code_reviewer.prompts import get_review_prompt, get_summarize_prompt
+from code_reviewer.utils import calculate_char_budget, chunk_string, _safe_str
 
 if TYPE_CHECKING:
-    from src.llm.base import LLMClient, LLMConfig
+    from code_reviewer.llm.base import LLMClient, LLMConfig
 
 DEFAULT_TOKEN_LIMIT = 1_000_000
 
@@ -66,7 +66,7 @@ def run_review(client: LLMClient, config: dict) -> tuple[list[str], str]:
     char_budget = calculate_char_budget(token_limit)
     if len(diff) <= char_budget:
         logger.info(f"Diff fits within budget ({len(diff)} <= {char_budget}), sending single request")
-        from src.llm.base import LLMConfig  # pylint: disable=import-outside-toplevel
+        from code_reviewer.llm.base import LLMConfig  # pylint: disable=import-outside-toplevel
 
         llm_config = LLMConfig(
             model=model,
@@ -164,7 +164,7 @@ def _review_chunk(
     max_output_tokens: int,
 ) -> str | None:
     """Review a single diff chunk with retry logic."""
-    from src.llm.base import LLMConfig  # pylint: disable=import-outside-toplevel
+    from code_reviewer.llm.base import LLMConfig  # pylint: disable=import-outside-toplevel
 
     max_attempts = int(os.getenv("LLM_MAX_ATTEMPTS", "3"))
     initial_wait = float(os.getenv("LLM_INITIAL_BACKOFF_SECONDS", "10"))
@@ -205,7 +205,7 @@ def _summarize_chunks(
     max_output_tokens: int,
 ) -> str:
     """Summarize multiple chunk reviews into a single review."""
-    from src.llm.base import LLMConfig  # pylint: disable=import-outside-toplevel
+    from code_reviewer.llm.base import LLMConfig  # pylint: disable=import-outside-toplevel
 
     summarize_prompt = get_summarize_prompt()
     chunked_reviews_join = "\n".join(chunked_reviews)

@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from src.main import generate_diff_from_files, main, print_local_review
+from code_reviewer.main import generate_diff_from_files, main, print_local_review
 
 
 def strip_ansi_codes(text: str) -> str:
@@ -40,9 +40,9 @@ class TestLocalMode:
     """Test local mode functionality."""
 
     # pylint: disable=unused-argument
-    @patch("src.main.subprocess.run")
-    @patch("src.main.run_review")
-    @patch("src.main.check_required_env_vars")
+    @patch("code_reviewer.main.subprocess.run")
+    @patch("code_reviewer.main.run_review")
+    @patch("code_reviewer.main.check_required_env_vars")
     def test_local_mode_with_no_staged_changes(self, mock_check_env, mock_run_review, mock_subprocess):
         """Test that local mode exits cleanly when no staged changes."""
         # Mock subprocess to return empty diff
@@ -74,10 +74,10 @@ class TestLocalMode:
                 if key in os.environ:
                     del os.environ[key]
 
-    @patch("src.main.subprocess.run")
-    @patch("src.main.run_review")
-    @patch("src.main.check_required_env_vars")
-    @patch("src.main.print_local_review")
+    @patch("code_reviewer.main.subprocess.run")
+    @patch("code_reviewer.main.run_review")
+    @patch("code_reviewer.main.check_required_env_vars")
+    @patch("code_reviewer.main.print_local_review")
     def test_local_mode_with_critical_issues_exits_1(self, *mocks):
         """Test that local mode exits with code 1 when critical issues found."""
         mock_print, _, mock_run_review, mock_subprocess = mocks
@@ -116,10 +116,10 @@ class TestLocalMode:
                 if key in os.environ:
                     del os.environ[key]
 
-    @patch("src.main.subprocess.run")
-    @patch("src.main.run_review")
-    @patch("src.main.check_required_env_vars")
-    @patch("src.main.print_local_review")
+    @patch("code_reviewer.main.subprocess.run")
+    @patch("code_reviewer.main.run_review")
+    @patch("code_reviewer.main.check_required_env_vars")
+    @patch("code_reviewer.main.print_local_review")
     def test_local_mode_with_important_issues_exits_0(self, *mocks):
         """Test that local mode exits with code 0 when only important issues found."""
         mock_print, _, mock_run_review, mock_subprocess = mocks
@@ -158,10 +158,10 @@ class TestLocalMode:
                 if key in os.environ:
                     del os.environ[key]
 
-    @patch("src.main.subprocess.run")
-    @patch("src.main.run_review")
-    @patch("src.main.check_required_env_vars")
-    @patch("src.main.print_local_review")
+    @patch("code_reviewer.main.subprocess.run")
+    @patch("code_reviewer.main.run_review")
+    @patch("code_reviewer.main.check_required_env_vars")
+    @patch("code_reviewer.main.print_local_review")
     def test_local_mode_with_no_issues_exits_0(self, *mocks):
         """Test that local mode exits with code 0 when no issues found."""
         mock_print, _, mock_run_review, mock_subprocess = mocks
@@ -200,7 +200,7 @@ class TestLocalMode:
                 if key in os.environ:
                     del os.environ[key]
 
-    @patch("src.main.subprocess.run")
+    @patch("code_reviewer.main.subprocess.run")
     def test_generate_diff_from_files(self, mock_subprocess):
         """Test diff generation from file list."""
         # Mock subprocess to return diffs
@@ -216,7 +216,7 @@ class TestLocalMode:
         assert mock_subprocess.call_count == 2
         assert "diff --git" in result
 
-    @patch("src.main.subprocess.run")
+    @patch("code_reviewer.main.subprocess.run")
     def test_generate_diff_from_files_handles_errors(self, mock_subprocess):
         """Test that diff generation handles git errors gracefully."""
         # Mock subprocess to raise CalledProcessError

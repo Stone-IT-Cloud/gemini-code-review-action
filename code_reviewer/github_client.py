@@ -19,7 +19,7 @@ import requests
 from github import Auth, Github
 from loguru import logger
 
-from src.utils import create_suggestion_fence
+from code_reviewer.utils import create_suggestion_fence
 
 
 def write_github_output(name: str, value: str) -> None:

@@ -10,7 +10,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from src.utils import create_suggestion_fence
+from code_reviewer.utils import create_suggestion_fence
 
 
 class TestCreateSuggestionFence:

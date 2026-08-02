@@ -11,7 +11,7 @@
 #  limitations under the License.
 """Prompt templates for Gemini code review and summarization."""
 
-from src.review_parser import REVIEW_SYSTEM_PROMPT
+from code_reviewer.review_parser import REVIEW_SYSTEM_PROMPT
 
 
 def get_review_prompt(extra_prompt: str = "") -> str:

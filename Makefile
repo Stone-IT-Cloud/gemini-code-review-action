@@ -28,7 +28,7 @@ build-docker:
 lint:
 
 lint-python:
-	ruff check src/
+	ruff check code_reviewer/
 
 lint-docker:
 	hadolint Dockerfile

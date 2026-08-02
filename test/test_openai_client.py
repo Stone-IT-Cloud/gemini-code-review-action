@@ -1,4 +1,4 @@
-"""Tests for src/llm/openai_client.py — OpenAI-compatible provider."""
+"""Tests for code_reviewer/llm/openai_client.py — OpenAI-compatible provider."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from src.llm.base import LLMConfig, LLMResponse
-from src.llm.openai_client import OpenAIClient
+from code_reviewer.llm.base import LLMConfig, LLMResponse
+from code_reviewer.llm.openai_client import OpenAIClient
 
 
 class TestOpenAIClientRegistration:
@@ -16,7 +16,7 @@ class TestOpenAIClientRegistration:
 
     def test_openai_client_is_registered(self):
         """OpenAI provider debe estar registrado en el registry."""
-        from src.llm import list_providers
+        from code_reviewer.llm import list_providers
 
         assert "openai" in list_providers()
 
@@ -146,26 +146,26 @@ class TestOpenRouterClient:
 
     def test_openrouter_is_registered(self):
         """openrouter provider debe estar registrado."""
-        from src.llm import list_providers
+        from code_reviewer.llm import list_providers
         assert "openrouter" in list_providers()
 
     def test_openrouter_defaults_to_openrouter_url(self):
         """OpenRouterClient usa https://openrouter.ai/api/v1 por defecto."""
-        from src.llm.openai_client import OpenRouterClient
+        from code_reviewer.llm.openai_client import OpenRouterClient
         with patch.dict("os.environ", {"OPENAI_API_KEY": "sk-test"}):
             client = OpenRouterClient.from_env()
             assert client._base_url == "https://openrouter.ai/api/v1"
 
     def test_openrouter_respects_custom_base_url(self):
         """OpenRouterClient respeta OPENAI_BASE_URL si se setea."""
-        from src.llm.openai_client import OpenRouterClient
+        from code_reviewer.llm.openai_client import OpenRouterClient
         with patch.dict("os.environ", {"OPENAI_API_KEY": "sk-test", "OPENAI_BASE_URL": "https://custom.api/v1"}):
             client = OpenRouterClient.from_env()
             assert client._base_url == "https://custom.api/v1"
 
     def test_openrouter_missing_key_raises(self):
         """Sin API key lanza ValueError."""
-        from src.llm.openai_client import OpenRouterClient
+        from code_reviewer.llm.openai_client import OpenRouterClient
         with patch.dict("os.environ", {}, clear=True):
             with pytest.raises(ValueError, match="OPENAI_API_KEY"):
                 OpenRouterClient.from_env()

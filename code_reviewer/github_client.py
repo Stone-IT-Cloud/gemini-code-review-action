@@ -1,0 +1,222 @@
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#          http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+"""GitHub API client — PR comments, inline reviews, and output helpers."""
+
+import json
+import os
+import time
+
+import requests
+from github import Auth, Github
+from loguru import logger
+
+from code_reviewer.utils import create_suggestion_fence
+
+
+def write_github_output(name: str, value: str) -> None:
+    """Write an output for GitHub Actions.
+
+    If the action is not running in GitHub Actions (no GITHUB_OUTPUT env var), this is a no-op.
+    """
+    output_path = os.getenv("GITHUB_OUTPUT")
+    if not output_path:
+        return
+
+    # Use a unique delimiter to safely support multiline values.
+    delimiter = f"ghadelim_{int(time.time() * 1000)}"
+    with open(output_path, "a", encoding="utf-8") as f:
+        f.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
+
+
+def create_inline_review_comments(
+    github_token: str,
+    github_repository: str,
+    pull_request_number: int,
+    git_commit_hash: str,
+    review_items: list[dict],
+) -> list[dict]:
+    """Create individual inline review comments for each review item.
+
+    Posts each review item as a separate inline comment using GitHub's
+    /pulls/{pr}/comments endpoint. This enables native "Commit suggestion"
+    buttons for items that include a suggestion field.
+
+    Args:
+        github_token: GitHub API token
+        github_repository: Repository in format owner/repo
+        pull_request_number: PR number
+        git_commit_hash: Commit SHA to comment on
+        review_items: List of review item dicts with file, line, comment,
+                      severity, and optional suggestion fields
+
+    Returns:
+        List of response dicts with status and error info for each comment
+    """
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "Authorization": f"Bearer {github_token}",
+        "Content-Type": "application/json",
+    }
+    url = f"https://api.github.com/repos/{github_repository}/" f"pulls/{pull_request_number}/comments"
+
+    results = []
+    for item in review_items:
+        # Skip file-level comments (line 0) as they require different handling
+        if item.get("line", 0) == 0:
+            fpath = item.get("file")
+            logger.info(f"Skipping file-level comment for {fpath} " "(line 0 not supported for inline comments)")
+            results.append(
+                {"file": item.get("file"), "line": 0, "status": "skipped", "reason": "file-level comment not supported"}
+            )
+            continue
+
+        # Build comment body with severity and message
+        severity = item.get("severity", "important").upper()
+        comment_text = item.get("comment", "")
+        body = f"**[{severity}]** {comment_text}"
+
+        # Add suggestion block if present
+        suggestion = item.get("suggestion")
+        if suggestion:
+            body += create_suggestion_fence(suggestion)
+
+        # Prepare API request data
+        data = {
+            "body": body,
+            "commit_id": git_commit_hash,
+            "path": item.get("file"),
+            "line": item.get("line"),
+            "side": "RIGHT",  # Comment on new changes (HEAD)
+        }
+
+        try:
+            response = requests.post(url, headers=headers, data=json.dumps(data), timeout=30)
+            if response.status_code == 201:
+                fpath, line_no = item.get("file"), item.get("line")
+                logger.info(f"Posted inline comment to {fpath}:{line_no}")
+                results.append(
+                    {"file": item.get("file"), "line": item.get("line"), "status": "success", "status_code": 201}
+                )
+            else:
+                fpath, line_no = item.get("file"), item.get("line")
+                logger.error(
+                    f"Failed to post inline comment to {fpath}:{line_no} - "
+                    f"HTTP {response.status_code}: {response.text}"
+                )
+                results.append(
+                    {
+                        "file": item.get("file"),
+                        "line": item.get("line"),
+                        "status": "failed",
+                        "status_code": response.status_code,
+                        "error": response.text,
+                    }
+                )
+        except Exception as exc:
+            # Catch network/HTTP errors so we never fail the entire review
+            # due to issues posting a single comment
+            fpath, line_no = item.get("file"), item.get("line")
+            logger.error(f"Exception posting inline comment to {fpath}:{line_no}: {exc}")
+            results.append({"file": item.get("file"), "line": item.get("line"), "status": "error", "error": str(exc)})
+
+    return results
+
+
+def create_a_comment_to_pull_request(
+    github_token: str,
+    github_repository: str,
+    pull_request_number: int,
+    git_commit_hash: str,
+    body: str,
+):
+    """Create a comment to a pull request."""
+    headers = {
+        "Accept": "application/vnd.github.v3.patch",
+        "authorization": f"Bearer {github_token}",
+    }
+    data = {"body": body, "commit_id": git_commit_hash, "event": "COMMENT"}
+    url = f"https://api.github.com/repos/{github_repository}/pulls/{pull_request_number}/reviews"
+    response = requests.post(url, headers=headers, data=json.dumps(data), timeout=30)
+    return response
+
+
+def _format_issue_comment(comment: object) -> str:
+    """Format a single issue comment into a summary line."""
+    author = getattr(getattr(comment, "user", None), "login", "unknown")
+    created = getattr(comment, "created_at", "")
+    body = (getattr(comment, "body", "") or "").strip()
+    return f"- {author} ({created}): {body}"
+
+
+def _format_review_comment(rc: object) -> str:
+    """Format a single inline review comment into a summary line.
+
+    Skips outdated comments (comments on code that has since changed).
+    """
+    # Skip outdated comments — code has changed since the comment was made
+    if getattr(rc, "outdated", False):
+        return ""
+
+    author = getattr(getattr(rc, "user", None), "login", "unknown")
+    created = getattr(rc, "created_at", "")
+    path = getattr(rc, "path", "")
+    line_info = getattr(rc, "original_line", None) or getattr(rc, "line", None) or "?"
+    body = (getattr(rc, "body", "") or "").strip()
+    return f"- {author} ({created}) {path}:{line_info}: {body}"
+
+
+def _format_review_summary(r: object) -> str:
+    """Format a single PR review into a summary line."""
+    author = getattr(getattr(r, "user", None), "login", "unknown")
+    state = getattr(r, "state", "")
+    submitted = getattr(r, "submitted_at", "")
+    body = (getattr(r, "body", "") or "").strip()
+    if body:
+        return f"- {author} ({submitted}) [{state}]: {body}"
+    return f"- {author} ({submitted}) [{state}]: <no body>"
+
+
+def get_all_pr_comments_text(github_token: str, github_repository: str, pull_request_number: int) -> str:
+    """Collect issue comments, review comments and reviews for a PR and format them.
+
+    Returns a single text blob suitable to send as model context.
+    """
+    g = Github(auth=Auth.Token(github_token))
+    try:
+        repo = g.get_repo(github_repository)
+        pr = repo.get_pull(pull_request_number)
+
+        issue_comments = list(pr.as_issue().get_comments())
+        review_comments = list(pr.get_comments())
+        reviews_list = list(pr.get_reviews())
+
+        lines: list[str] = []
+        if issue_comments:
+            lines.append("[Issue comments]")
+            lines.extend(_format_issue_comment(c) for c in issue_comments)
+
+        if review_comments:
+            lines.append("[Review comments]")
+            lines.extend(_format_review_comment(rc) for rc in review_comments)
+
+        if reviews_list:
+            lines.append("[Reviews]")
+            lines.extend(_format_review_summary(r) for r in reviews_list)
+
+        joined = "\n".join(lines).strip()
+        logger.info(
+            f"Collected PR comments payload length: {len(joined)} characters across "
+            f"{len(issue_comments)} issue, {len(review_comments)} review, {len(reviews_list)} reviews"
+        )
+        return joined
+    finally:
+        g.close()

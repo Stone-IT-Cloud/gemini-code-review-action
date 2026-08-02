@@ -9,16 +9,16 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Tests for src/gemini_client.py — Gemini API interaction layer."""
+"""Tests for code_reviewer/gemini_client.py — Gemini API interaction layer."""
 
 from unittest.mock import MagicMock
 
 import pytest
 from google.genai import errors
 
-from src.config import AiReviewConfig
-from src.gemini_client import DEFAULT_TOKEN_LIMIT, get_model_context_limit, get_review
-from src.llm.gemini_client import GeminiClient, _handle_api_error
+from code_reviewer.config import AiReviewConfig
+from code_reviewer.gemini_client import DEFAULT_TOKEN_LIMIT, get_model_context_limit, get_review
+from code_reviewer.llm.gemini_client import GeminiClient, _handle_api_error
 
 # ---------------------------------------------------------------------------
 # get_model_context_limit
@@ -82,8 +82,8 @@ class TestGetReviewSingleCall:
 
     def test_single_call_when_diff_fits_budget(self, mocker):
         """Diff fits within budget → single generate_content, no summarization."""
-        mock_context_limit = mocker.patch("src.gemini_client.get_model_context_limit")
-        mock_calc_budget = mocker.patch("src.gemini_client.calculate_char_budget")
+        mock_context_limit = mocker.patch("code_reviewer.gemini_client.get_model_context_limit")
+        mock_calc_budget = mocker.patch("code_reviewer.gemini_client.calculate_char_budget")
         mock_context_limit.return_value = 1_000_000
         mock_calc_budget.return_value = 1_600_000
 
@@ -100,8 +100,8 @@ class TestGetReviewSingleCall:
 
     def test_single_call_returns_empty_on_none_response(self, mocker):
         """When generate_content returns None text, return empty."""
-        mocker.patch("src.gemini_client.get_model_context_limit", return_value=1_000_000)
-        mocker.patch("src.gemini_client.calculate_char_budget", return_value=1_600_000)
+        mocker.patch("code_reviewer.gemini_client.get_model_context_limit", return_value=1_000_000)
+        mocker.patch("code_reviewer.gemini_client.calculate_char_budget", return_value=1_600_000)
 
         client = MagicMock()
         response = MagicMock()
@@ -119,10 +119,10 @@ class TestGetReviewMultiChunk:
 
     def test_multi_chunk_when_diff_exceeds_budget(self, mocker):
         """Diff exceeds budget → chunking + summarization."""
-        mocker.patch("src.llm.gemini_client.calculate_char_budget", return_value=10)
+        mocker.patch("code_reviewer.llm.gemini_client.calculate_char_budget", return_value=10)
         mock_tracker = MagicMock()
         mock_tracker.has_all_quotas_set_to_zero.return_value = False
-        mocker.patch("src.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
+        mocker.patch("code_reviewer.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
 
         client = MagicMock()
         # wrap in GeminiClient so get_context_limit returns a high token limit
@@ -148,10 +148,10 @@ class TestGetReviewMultiChunk:
 
     def test_multi_chunk_single_chunk_skips_summary(self, mocker):
         """When chunking produces only 1 chunk, no separate summarization call (just returns it)."""
-        mocker.patch("src.llm.gemini_client.calculate_char_budget", return_value=10)
+        mocker.patch("code_reviewer.llm.gemini_client.calculate_char_budget", return_value=10)
         mock_tracker = MagicMock()
         mock_tracker.has_all_quotas_set_to_zero.return_value = False
-        mocker.patch("src.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
+        mocker.patch("code_reviewer.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
 
         client = MagicMock()
         gc = GeminiClient(client)
@@ -172,7 +172,7 @@ class TestGetReviewMultiChunk:
 
     def test_fallback_budget_on_get_model_failure(self, mocker):
         """get_context_limit falls back to DEFAULT_TOKEN_LIMIT."""
-        mocker.patch("src.llm.gemini_client.calculate_char_budget", return_value=100_000)
+        mocker.patch("code_reviewer.llm.gemini_client.calculate_char_budget", return_value=100_000)
 
         client = MagicMock()
         gc = GeminiClient(client)
@@ -321,12 +321,12 @@ class TestProcessSingleChunkConfig:
         """R3/R4: _process_single_chunk accepts and passes config to API call."""
         mock_tracker = MagicMock()
         mock_tracker.has_all_quotas_set_to_zero.return_value = False
-        mocker.patch("src.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
+        mocker.patch("code_reviewer.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
 
         client = MagicMock()
         gc = GeminiClient(client)
         mocker.patch.object(gc, "get_context_limit", return_value=1_000_000)
-        mocker.patch("src.llm.gemini_client.calculate_char_budget", return_value=10)
+        mocker.patch("code_reviewer.llm.gemini_client.calculate_char_budget", return_value=10)
 
         llm_config = MagicMock()
         llm_config.system_instruction = "You are a code reviewer."
@@ -367,8 +367,8 @@ class TestProcessSingleChunkConfig:
         """R5: _process_chunks forwards llm_config to _process_single_chunk."""
         mock_tracker = MagicMock()
         mock_tracker.has_all_quotas_set_to_zero.return_value = False
-        mocker.patch("src.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
-        mocker.patch("src.llm.gemini_client.calculate_char_budget", return_value=10)
+        mocker.patch("code_reviewer.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
+        mocker.patch("code_reviewer.llm.gemini_client.calculate_char_budget", return_value=10)
 
         client = MagicMock()
         gc = GeminiClient(client)
@@ -404,12 +404,12 @@ class TestProcessSingleChunkConfig:
         """R3/R4: SDK generate_content receives config with response_mime_type and system_instruction."""
         mock_tracker = MagicMock()
         mock_tracker.has_all_quotas_set_to_zero.return_value = False
-        mocker.patch("src.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
+        mocker.patch("code_reviewer.llm.gemini_client.QuotaTracker.from_env", return_value=mock_tracker)
 
         client = MagicMock()
         gc = GeminiClient(client)
         mocker.patch.object(gc, "get_context_limit", return_value=1_000_000)
-        mocker.patch("src.llm.gemini_client.calculate_char_budget", return_value=10)
+        mocker.patch("code_reviewer.llm.gemini_client.calculate_char_budget", return_value=10)
 
         llm_config = MagicMock()
         llm_config.system_instruction = "You are an expert code reviewer."

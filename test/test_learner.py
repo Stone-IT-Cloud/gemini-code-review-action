@@ -9,19 +9,19 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Tests for src/learner.py — post-PR learning from human discussions."""
+"""Tests for code_reviewer/learner.py — post-PR learning from human discussions."""
 
 import os
 import tempfile
 from unittest.mock import MagicMock, patch
 
-from src.learner import (
+from code_reviewer.learner import (
     _classify_decision,
     _fetch_bot_comments,
     _parse_pr_number,
     run,
 )
-from src.review_memory import ensure_engram, observation_count, store_decision
+from code_reviewer.review_memory import ensure_engram, observation_count, store_decision
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +58,7 @@ class TestParsePrNumber:
 
 
 class TestFetchBotComments:
-    @patch("src.learner.requests.get")
+    @patch("code_reviewer.learner.requests.get")
     def test_returns_bot_comments(self, mock_get):
         mock_get.return_value.json.side_effect = [
             [
@@ -97,7 +97,7 @@ class TestFetchBotComments:
         assert len(comments[0]["replies"]) == 1
         assert comments[0]["replies"][0]["body"] == "This is fine"
 
-    @patch("src.learner.requests.get")
+    @patch("code_reviewer.learner.requests.get")
     def test_includes_human_replies(self, mock_get):
         mock_get.return_value.json.side_effect = [
             [
@@ -160,7 +160,7 @@ class TestClassifyDecision:
 
 
 class TestRun:
-    @patch("src.learner._fetch_bot_comments")
+    @patch("code_reviewer.learner._fetch_bot_comments")
     def test_stores_rejected_decisions_in_engram(self, mock_fetch):
         mock_fetch.return_value = [
             {
@@ -186,7 +186,7 @@ class TestRun:
             assert result["stored"] == 1
             assert observation_count(tmp, "owner/repo") == 1
 
-    @patch("src.learner._fetch_bot_comments")
+    @patch("code_reviewer.learner._fetch_bot_comments")
     def test_skips_comments_without_replies(self, mock_fetch):
         mock_fetch.return_value = [
             {
@@ -216,7 +216,7 @@ class TestRun:
 
 
 class TestFetchBotCommentsPagination:
-    @patch("src.learner.requests.get")
+    @patch("code_reviewer.learner.requests.get")
     def test_fetches_multiple_pages(self, mock_get):
         """Returns 150 comments across 2 pages, expects both pages fetched."""
         page1 = [{"id": i, "user": {"login": "github-actions[bot]"}, "body": f"Suggestion {i}"} for i in range(100)]
@@ -234,7 +234,7 @@ class TestFetchBotCommentsPagination:
         # Verify the function fetched all pages (3rd is empty → stop)
         assert mock_get.call_count == 3, f"Expected 3 calls, got {mock_get.call_count}"
 
-    @patch("src.learner.requests.get")
+    @patch("code_reviewer.learner.requests.get")
     def test_fetches_until_empty_page(self, mock_get):
         """Stops fetching when an empty page is returned."""
         mock_get.return_value.json.side_effect = [

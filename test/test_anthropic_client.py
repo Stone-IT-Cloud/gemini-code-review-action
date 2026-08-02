@@ -1,4 +1,4 @@
-"""Tests for src/llm/anthropic_client.py — Anthropic Claude provider."""
+"""Tests for code_reviewer/llm/anthropic_client.py — Anthropic Claude provider."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from src.llm.anthropic_client import AnthropicClient
-from src.llm.base import LLMConfig
+from code_reviewer.llm.anthropic_client import AnthropicClient
+from code_reviewer.llm.base import LLMConfig
 
 
 class TestAnthropicRegistration:
     def test_anthropic_is_registered(self):
-        from src.llm import list_providers
+        from code_reviewer.llm import list_providers
         assert "anthropic" in list_providers()
 
 

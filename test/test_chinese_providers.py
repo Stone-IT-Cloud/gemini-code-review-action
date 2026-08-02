@@ -1,4 +1,4 @@
-"""Tests for src/llm/chinese_providers.py — DeepSeek, Qwen, Kimi, Baichuan, Zhipu."""
+"""Tests for code_reviewer/llm/chinese_providers.py — DeepSeek, Qwen, Kimi, Baichuan, Zhipu."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.llm.chinese_providers import (
+from code_reviewer.llm.chinese_providers import (
     BaichuanClient,
     DeepSeekClient,
     KimiClient,
@@ -19,7 +19,7 @@ class TestChineseProvidersRegistration:
     """All Chinese providers must be registered."""
 
     def test_all_providers_registered(self):
-        from src.llm import list_providers
+        from code_reviewer.llm import list_providers
         providers = list_providers()
         for name in ("deepseek", "qwen", "kimi", "baichuan", "zhipu"):
             assert name in providers, f"{name} not registered"

@@ -24,7 +24,7 @@ REVIEW_LEVEL="${2:-IMPORTANT}"
 
 export LOCAL=1
 
-python -m src.main \
+python -m code_reviewer.main \
     --diff-file="${DIFF_FILE}" \
     --model="gemini-2.5-flash" \
     --extra-prompt="Please write your review in English as an experienced software engineer." \

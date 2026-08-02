@@ -25,7 +25,7 @@ repos:
     rev: v1.11.0
     hooks:
       - id: mypy
-        files: ^src/
+        files: ^code_reviewer/
         language_version: python3.12
         additional_dependencies:
           - types-requests
@@ -33,17 +33,17 @@ repos:
     hooks:
       - id: xenon
         name: xenon
-        entry: xenon --max-absolute B --max-modules B --max-average A src
+        entry: xenon --max-absolute B --max-modules B --max-average A code_reviewer
         language: system
-        files: ^src/.*\.py$
+        files: ^code_reviewer/.*\.py$
         pass_filenames: false
   - repo: local
     hooks:
       - id: bandit
         name: bandit
-        entry: bandit -r src -c pyproject.toml
+        entry: bandit -r code_reviewer -c pyproject.toml
         language: system
-        files: ^src/.*\.py$
+        files: ^code_reviewer/.*\.py$
         pass_filenames: false
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0

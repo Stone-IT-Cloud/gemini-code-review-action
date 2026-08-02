@@ -9,8 +9,8 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-from src.prompts import get_review_prompt
-from src.review_parser import REVIEW_SYSTEM_PROMPT
+from code_reviewer.prompts import get_review_prompt
+from code_reviewer.review_parser import REVIEW_SYSTEM_PROMPT
 
 
 class TestGetReviewPrompt:

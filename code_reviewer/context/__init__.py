@@ -9,26 +9,8 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+"""Context scanning module for polyglot project analysis."""
 
-.PHONE: setup
-setup:
-	pip install --force-reinstall --no-cache pip==23.0.1 setuptools==67.6.1
-	pip install --force-reinstall --no-cache -r requirements-dev.txt --use-deprecated=legacy-resolver
+from code_reviewer.context.scanner import ContextScanner
 
-.PHONY: setup-dev
-setup-dev:
-	pip install --force-reinstall --no-cache pip==23.0.1 setuptools==67.6.1
-	pip install --force-reinstall --no-cache -r requirements-dev.txt --use-deprecated=legacy-resolver
-	pre-commit install
-
-build-docker:
-	docker build -t gpt-code-review-action .
-
-
-lint:
-
-lint-python:
-	ruff check code_reviewer/
-
-lint-docker:
-	hadolint Dockerfile
+__all__ = ["ContextScanner"]

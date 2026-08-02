@@ -235,13 +235,13 @@ To reduce review noise, the action classifies comments by severity and allows yo
 
 ```bash
 # Option 1: Use CLI parameter
-python -m src.main \
+python -m code_reviewer.main \
     --diff-file=/tmp/my-changes.diff \
     --review-level=CRITICAL
 
 # Option 2: Use environment variable
 export REVIEW_LEVEL=CRITICAL
-python -m src.main --diff-file=/tmp/my-changes.diff
+python -m code_reviewer.main --diff-file=/tmp/my-changes.diff
 ```
 
 **Behavior:**
@@ -445,7 +445,7 @@ export LOCAL=1
 git diff main > /tmp/my-changes.diff
 
 # Run the review
-python -m src.main \
+python -m code_reviewer.main \
     --diff-file=/tmp/my-changes.diff \
     --model=gemini-2.5-flash \
     --extra-prompt="Review as a senior Python engineer." \
@@ -478,7 +478,7 @@ bash test/run-local.sh /tmp/my-changes.diff
 The source code follows the **Single Responsibility Principle (SRP)**, with each module handling one concern:
 
 ```
-src/
+code_reviewer/
 ├── main.py              # CLI entry point and orchestration
 ├── config.py            # Configuration and environment validation
 ├── gemini_client.py     # Backward-compat shim for Gemini
@@ -508,8 +508,8 @@ The action uses a clean provider abstraction to support multiple LLM backends:
 │  main.py  (orchestration, CLI)              │
 │    ↓ run_review(client, config)             │
 ├─────────────────────────────────────────────┤
-│  src/llm/review.py  (chunking, budget,      │
-│                      summarization)          │
+│  code_reviewer/llm/review.py (chunking,   │
+│  budget, summarization)                 │
 │    ↓ client.generate_content(prompt, cfg)   │
 ├─────────────────────────────────────────────┤
 │  LLMClient (ABC)  ←── OpenAIClient          │
@@ -522,11 +522,11 @@ The action uses a clean provider abstraction to support multiple LLM backends:
 
 Adding a new provider requires **one file and one import**:
 
-**1. Create the provider class** in `src/llm/<name>_client.py`:
+**1. Create the provider class** in `code_reviewer/llm/<name>_client.py`:
 
 ```python
-from src.llm.base import LLMClient, LLMConfig, LLMResponse
-from src.llm.provider_registry import register_provider
+from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
+from code_reviewer.llm.provider_registry import register_provider
 
 class MyCustomClient(LLMClient):
     @classmethod
@@ -534,11 +534,11 @@ class MyCustomClient(LLMClient):
         # Read API keys / config from environment
         api_key = os.getenv("MY_API_KEY")
         return cls(api_key)
-    
+
     def generate_content(self, prompt: str, config: LLMConfig) -> LLMResponse:
         # Send prompt to the API, return LLMResponse with text + usage
         ...
-    
+
     def get_context_limit(self, model: str) -> int:
         # Return max tokens for this model
         return 128_000
@@ -546,10 +546,10 @@ class MyCustomClient(LLMClient):
 register_provider("mycustom", MyCustomClient)
 ```
 
-**2. Register in `src/llm/__init__.py`** — add one line:
+**2. Register in `code_reviewer/llm/__init__.py`** — add one line:
 
 ```python
-from src.llm import my_custom_client  # noqa: F401
+from code_reviewer.llm import my_custom_client  # noqa: F401
 ```
 
 **3. Configure via env vars:**

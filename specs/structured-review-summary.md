@@ -32,7 +32,7 @@ Si no hay issues de una severidad, esa línea se omite. Si no hay ningún issue,
 
 ## Implementación
 
-**Archivo:** `src/review_parser.py` — nueva función `build_review_summary()`
+**Archivo:** `code_reviewer/review_parser.py` — nueva función `build_review_summary()`
 
 ```python
 def build_review_summary(
@@ -42,9 +42,9 @@ def build_review_summary(
     """Build a structured summary header for the review."""
 ```
 
-**Archivo:** `src/main.py` — donde se arma `review_comment`, agregar el summary al principio.
+**Archivo:** `code_reviewer/main.py` — donde se arma `review_comment`, agregar el summary al principio.
 
-**Archivo:** `src/review_parser.py` — función `format_review_comment()` existente, insertar summary al inicio.
+**Archivo:** `code_reviewer/review_parser.py` — función `format_review_comment()` existente, insertar summary al inicio.
 
 ### Inputs necesarios
 
@@ -81,8 +81,8 @@ def _parse_diff_stats(diff: str) -> dict[str, int]:
 
 ## Archivos a modificar
 
-- `src/review_parser.py` — `build_review_summary()` + `_parse_diff_stats()`
-- `src/main.py` — integrar summary en `review_comment`
+- `code_reviewer/review_parser.py` — `build_review_summary()` + `_parse_diff_stats()`
+- `code_reviewer/main.py` — integrar summary en `review_comment`
 - `test/test_review_parser.py` — tests del summary
 
 ## No-rompimiento

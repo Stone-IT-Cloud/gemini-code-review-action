@@ -2,7 +2,7 @@
 
 > **Goal:** Refactor `gemini-code-review-action` from a Gemini-only action to a multi-provider LLM code review action, supporting OpenAI, Anthropic, DeepSeek, Kimi, Qwen, OpenRouter, and any OpenAI-compatible API.
 
-**Architecture:** Introduce a lightweight provider abstraction (`src/llm/`) with a common `LLMClient` interface. Each provider implements it. The action selects the provider at runtime via an env var (`LLM_PROVIDER`). The existing Gemini code is refactored into a `GeminiClient` class, and new `OpenAIClient` (covers OpenAI, DeepSeek, Kimi, Qwen, OpenRouter via compatibility) and `AnthropicClient` are added.
+**Architecture:** Introduce a lightweight provider abstraction (`code_reviewer/llm/`) with a common `LLMClient` interface. Each provider implements it. The action selects the provider at runtime via an env var (`LLM_PROVIDER`). The existing Gemini code is refactored into a `GeminiClient` class, and new `OpenAIClient` (covers OpenAI, DeepSeek, Kimi, Qwen, OpenRouter via compatibility) and `AnthropicClient` are added.
 
 **Tech Stack:** Python 3.12, `requests` for OpenAI-compatible APIs, `anthropic` SDK, `google-genai` SDK (kept for Gemini), `pytest`, `ruff`
 
@@ -13,11 +13,11 @@
 **Objective:** Define the abstract interface that all LLM providers must implement.
 
 **Files:**
-- Create: `src/llm/__init__.py`
-- Create: `src/llm/base.py`
-- Create: `src/llm/provider_registry.py`
+- Create: `code_reviewer/llm/__init__.py`
+- Create: `code_reviewer/llm/base.py`
+- Create: `code_reviewer/llm/provider_registry.py`
 
-**Step 1: Write `src/llm/base.py`**
+**Step 1: Write `code_reviewer/llm/base.py`**
 
 ```python
 """Abstract base class and types for LLM provider clients."""
@@ -61,7 +61,7 @@ class LLMClient(ABC):
         ...
 ```
 
-**Step 2: Write `src/llm/provider_registry.py`**
+**Step 2: Write `code_reviewer/llm/provider_registry.py`**
 
 ```python
 """Provider registration and factory."""
@@ -74,7 +74,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
-    from src.llm.base import LLMClient
+    from code_reviewer.llm.base import LLMClient
 
 
 _PROVIDERS: dict[str, type[LLMClient]] = {}
@@ -118,12 +118,12 @@ def get_llm_client(provider: str | None = None) -> LLMClient:
     return client_class.from_env()
 ```
 
-**Step 3: Write `src/llm/__init__.py`**
+**Step 3: Write `code_reviewer/llm/__init__.py`**
 
 ```python
 """LLM provider abstraction layer — multi-model support for code review."""
-from src.llm.base import LLMClient, LLMConfig, LLMResponse
-from src.llm.provider_registry import get_llm_client, list_providers, register_provider
+from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
+from code_reviewer.llm.provider_registry import get_llm_client, list_providers, register_provider
 
 __all__ = [
     "LLMClient",
@@ -139,7 +139,7 @@ __all__ = [
 
 ```bash
 cd /root/work/gemini-code-review-action
-python -c "from src.llm import LLMClient, LLMConfig; print('OK')"
+python -c "from code_reviewer.llm import LLMClient, LLMConfig; print('OK')"
 ```
 
 Expected: `OK`
@@ -147,7 +147,7 @@ Expected: `OK`
 **Step 5: Commit**
 
 ```bash
-git add src/llm/
+git add code_reviewer/llm/
 git commit -m "feat: add LLM provider base class, types, and registry"
 ```
 
@@ -155,14 +155,14 @@ git commit -m "feat: add LLM provider base class, types, and registry"
 
 ## Task 2: Refactor Gemini into a provider class
 
-**Objective:** Move the existing Gemini logic from `src/gemini_client.py` into `src/llm/gemini_client.py` implementing `LLMClient`.
+**Objective:** Move the existing Gemini logic from `code_reviewer/gemini_client.py` into `code_reviewer/llm/gemini_client.py` implementing `LLMClient`.
 
 **Files:**
-- Create: `src/llm/gemini_client.py`
-- Modify: `src/gemini_client.py` → thin re-export shim for backward compat
-- Modify: `src/llm/__init__.py` → register provider
+- Create: `code_reviewer/llm/gemini_client.py`
+- Modify: `code_reviewer/gemini_client.py` → thin re-export shim for backward compat
+- Modify: `code_reviewer/llm/__init__.py` → register provider
 
-**Step 1: Write `src/llm/gemini_client.py`**
+**Step 1: Write `code_reviewer/llm/gemini_client.py`**
 
 The class wraps the existing logic but implements `LLMClient`. Key points:
 - `from_env()` reads `GEMINI_API_KEY` and instantiates `genai.Client`
@@ -183,11 +183,11 @@ from typing import Any
 from google.genai import errors as gemini_errors, types as gemini_types
 from loguru import logger
 
-from src.llm.base import LLMClient, LLMConfig, LLMResponse
-from src.llm.provider_registry import register_provider
-from src.prompts import get_review_prompt, get_summarize_prompt
-from src.quota import NoQuotaAvailableError, QuotaTracker, _handle_api_error
-from src.utils import _extract_model_text, _safe_str, calculate_char_budget, chunk_string
+from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
+from code_reviewer.llm.provider_registry import register_provider
+from code_reviewer.prompts import get_review_prompt, get_summarize_prompt
+from code_reviewer.quota import NoQuotaAvailableError, QuotaTracker, _handle_api_error
+from code_reviewer.utils import _extract_model_text, _safe_str, calculate_char_budget, chunk_string
 
 DEFAULT_TOKEN_LIMIT = 1_000_000
 
@@ -241,7 +241,7 @@ class GeminiClient(LLMClient):
     # ── Existing chunked/summarize logic moved here ──
     def get_review(self, config: dict) -> tuple[list[str], str]:
         """Legacy entry point — get_review interface for backward compatibility.
-        
+
         This is the main review flow (budget check → single call or chunked).
         """
         model = config["model"]
@@ -311,19 +311,19 @@ def _extract_usage(response: Any) -> dict[str, int]:
 register_provider("gemini", GeminiClient)
 ```
 
-**Step 2: Re-export from `src/gemini_client.py` for backward compat**
+**Step 2: Re-export from `code_reviewer/gemini_client.py` for backward compat**
 
-The existing file becomes a thin shim that imports from `src.llm.gemini_client`:
+The existing file becomes a thin shim that imports from `code_reviewer.llm.gemini_client`:
 
 ```python
-"""Backward-compat re-exports. New code should import from src.llm."""
-from src.llm.gemini_client import GeminiClient, get_review  # noqa: F401
+"""Backward-compat re-exports. New code should import from code_reviewer.llm."""
+from code_reviewer.llm.gemini_client import GeminiClient, get_review  # noqa: F401
 ```
 
 **Step 3: Verify**
 
 ```bash
-python -c "from src.llm import get_llm_client; c = get_llm_client('gemini'); print(type(c).__name__)"
+python -c "from code_reviewer.llm import get_llm_client; c = get_llm_client('gemini'); print(type(c).__name__)"
 ```
 
 Expected: `GeminiClient`
@@ -331,8 +331,8 @@ Expected: `GeminiClient`
 **Step 4: Commit**
 
 ```bash
-git add src/llm/gemini_client.py src/gemini_client.py
-git commit -m "refactor: extract Gemini provider into src/llm/gemini_client.py"
+git add code_reviewer/llm/gemini_client.py code_reviewer/gemini_client.py
+git commit -m "refactor: extract Gemini provider into code_reviewer/llm/gemini_client.py"
 ```
 
 ---
@@ -342,10 +342,10 @@ git commit -m "refactor: extract Gemini provider into src/llm/gemini_client.py"
 **Objective:** Implement `OpenAIClient` supporting OpenAI, DeepSeek, Kimi, Qwen, and any OpenAI-compatible API (including OpenRouter) via configurable base URL.
 
 **Files:**
-- Create: `src/llm/openai_client.py`
-- Modify: `src/llm/__init__.py`
+- Create: `code_reviewer/llm/openai_client.py`
+- Modify: `code_reviewer/llm/__init__.py`
 
-**Step 1: Write `src/llm/openai_client.py`**
+**Step 1: Write `code_reviewer/llm/openai_client.py`**
 
 ```python
 """OpenAI-compatible provider — supports OpenAI, DeepSeek, Kimi, Qwen, OpenRouter."""
@@ -360,8 +360,8 @@ from typing import Any
 import requests
 from loguru import logger
 
-from src.llm.base import LLMClient, LLMConfig, LLMResponse
-from src.llm.provider_registry import register_provider
+from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
+from code_reviewer.llm.provider_registry import register_provider
 
 DEFAULT_TOKEN_LIMIT = 128_000
 
@@ -470,7 +470,7 @@ register_provider("openai", OpenAIClient)
 
 ```bash
 python -c "
-from src.llm import get_llm_client
+from code_reviewer.llm import get_llm_client
 c = get_llm_client('openai')
 print(type(c).__name__)
 print(f'Base URL: {c._base_url}')
@@ -482,7 +482,7 @@ Expected: `OpenAIClient`, `Base URL: https://api.openai.com/v1`
 **Step 3: Commit**
 
 ```bash
-git add src/llm/openai_client.py
+git add code_reviewer/llm/openai_client.py
 git commit -m "feat: add OpenAI-compatible LLM provider (OpenAI, DeepSeek, Kimi, Qwen, OpenRouter)"
 ```
 
@@ -493,10 +493,10 @@ git commit -m "feat: add OpenAI-compatible LLM provider (OpenAI, DeepSeek, Kimi,
 **Objective:** Implement `AnthropicClient` using the official `anthropic` SDK.
 
 **Files:**
-- Create: `src/llm/anthropic_client.py`
-- Modify: `src/llm/__init__.py`
+- Create: `code_reviewer/llm/anthropic_client.py`
+- Modify: `code_reviewer/llm/__init__.py`
 
-**Step 1: Write `src/llm/anthropic_client.py`**
+**Step 1: Write `code_reviewer/llm/anthropic_client.py`**
 
 ```python
 """Anthropic provider — implements LLMClient via anthropic SDK."""
@@ -509,8 +509,8 @@ from typing import Any
 from anthropic import Anthropic
 from loguru import logger
 
-from src.llm.base import LLMClient, LLMConfig, LLMResponse
-from src.llm.provider_registry import register_provider
+from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
+from code_reviewer.llm.provider_registry import register_provider
 
 DEFAULT_TOKEN_LIMIT = 200_000
 
@@ -576,7 +576,7 @@ anthropic>=0.40,<1
 **Step 3: Verify**
 
 ```bash
-python -c "from src.llm import get_llm_client; c = get_llm_client('anthropic'); print(type(c).__name__)"
+python -c "from code_reviewer.llm import get_llm_client; c = get_llm_client('anthropic'); print(type(c).__name__)"
 ```
 
 Expected: `AnthropicClient`
@@ -584,7 +584,7 @@ Expected: `AnthropicClient`
 **Step 4: Commit**
 
 ```bash
-git add src/llm/anthropic_client.py requirements.txt
+git add code_reviewer/llm/anthropic_client.py requirements.txt
 git commit -m "feat: add Anthropic LLM provider (Claude)"
 ```
 
@@ -592,19 +592,19 @@ git commit -m "feat: add Anthropic LLM provider (Claude)"
 
 ## Task 5: Decouple quota.py from google.genai imports
 
-**Objective:** Remove the hard dependency on `google.genai.errors` in `src/quota.py` so it can be reused across providers.
+**Objective:** Remove the hard dependency on `google.genai.errors` in `code_reviewer/quota.py` so it can be reused across providers.
 
 **Files:**
-- Modify: `src/quota.py` — make `_handle_api_error` provider-agnostic or move Gemini-specific handling to `src/llm/gemini_client.py`
+- Modify: `code_reviewer/quota.py` — make `_handle_api_error` provider-agnostic or move Gemini-specific handling to `code_reviewer/llm/gemini_client.py`
 
-**Step 1: Analyze** — The `_handle_api_error` function references `errors.APIError` from `google.genai`. This is only used in `src/gemini_client.py`'s chunk processing. Solution: Move `_handle_api_error` into `src/llm/gemini_client.py` as a private helper, and keep `QuotaTracker` in `src/quota.py` clean.
+**Step 1: Analyze** — The `_handle_api_error` function references `errors.APIError` from `google.genai`. This is only used in `code_reviewer/gemini_client.py`'s chunk processing. Solution: Move `_handle_api_error` into `code_reviewer/llm/gemini_client.py` as a private helper, and keep `QuotaTracker` in `code_reviewer/quota.py` clean.
 
-**Step 2: Refactor** — Remove `_handle_api_error` and `NoQuotaAvailableError` from `src/quota.py`. Move them to `src/llm/gemini_client.py`.
+**Step 2: Refactor** — Remove `_handle_api_error` and `NoQuotaAvailableError` from `code_reviewer/quota.py`. Move them to `code_reviewer/llm/gemini_client.py`.
 
 **Step 3: Commit**
 
 ```bash
-git add src/quota.py src/llm/gemini_client.py
+git add code_reviewer/quota.py code_reviewer/llm/gemini_client.py
 git commit -m "refactor: decouple quota.py from google.genai, move error handling to Gemini provider"
 ```
 
@@ -617,17 +617,17 @@ git commit -m "refactor: decouple quota.py from google.genai, move error handlin
 The `_extract_model_text(response)` function accesses `response.text` which is Gemini-specific. Since the new `LLMResponse` already carries `.text`, this function is no longer needed in the new code paths. Keep it in utils for backward compat but mark as deprecated.
 
 **Files:**
-- Modify: `src/utils.py` — add deprecation note, no functional change needed
+- Modify: `code_reviewer/utils.py` — add deprecation note, no functional change needed
 - No immediate code change required — the GeminiClient internally uses `_extract_model_text` which is fine.
 
 ---
 
 ## Task 7: Wire providers into main.py
 
-**Objective:** Update `src/main.py` to select the LLM provider at startup and use the abstraction layer.
+**Objective:** Update `code_reviewer/main.py` to select the LLM provider at startup and use the abstraction layer.
 
 **Files:**
-- Modify: `src/main.py`
+- Modify: `code_reviewer/main.py`
 
 **Key changes:**
 
@@ -635,9 +635,9 @@ The `_extract_model_text(response)` function accesses `response.text` which is G
 2. Replace `genai.Client(api_key=api_key)` with `get_llm_client(provider)`
 3. Pass the `LLMClient` instance to `get_review()` instead of a `genai.Client`
 4. Update `check_required_env_vars()` to be provider-aware
-5. Update `AiReviewConfig` in `src/config.py` to be provider-agnostic
+5. Update `AiReviewConfig` in `code_reviewer/config.py` to be provider-agnostic
 
-**Step 1: Update `src/config.py`**
+**Step 1: Update `code_reviewer/config.py`**
 
 ```python
 class AiReviewConfig(TypedDict):
@@ -658,28 +658,28 @@ class AiReviewConfig(TypedDict):
 def check_required_env_vars():
     """Check required environment variables based on provider."""
     provider = (os.getenv("LLM_PROVIDER") or "gemini").strip().lower()
-    
-    required_env_vars = ["GITHUB_TOKEN", "GITHUB_REPOSITORY", 
+
+    required_env_vars = ["GITHUB_TOKEN", "GITHUB_REPOSITORY",
                          "GITHUB_PULL_REQUEST_NUMBER", "GIT_COMMIT_HASH"]
-    
+
     if provider == "gemini":
         required_env_vars.insert(0, "GEMINI_API_KEY")
     elif provider == "openai":
         required_env_vars.insert(0, "OPENAI_API_KEY")
     elif provider == "anthropic":
         required_env_vars.insert(0, "ANTHROPIC_API_KEY")
-    
+
     if os.getenv("LOCAL") is not None:
         # Local mode only needs the LLM API key
         required_env_vars = [v for v in required_env_vars if v.startswith(("GEMINI_", "OPENAI_", "ANTHROPIC_")) or v == "LLM_API_KEY"]
-    
+
     for required_env_var in required_env_vars:
         value = os.getenv(required_env_var)
         if value is None or not value.strip():
             raise ValueError(f"{required_env_var} is not set or is empty")
 ```
 
-**Step 2: Update `src/main.py` main() function**
+**Step 2: Update `code_reviewer/main.py` main() function**
 
 Replace:
 ```python
@@ -689,7 +689,7 @@ client = genai.Client(api_key=api_key)
 
 With:
 ```python
-from src.llm import get_llm_client
+from code_reviewer.llm import get_llm_client
 client = get_llm_client(provider=provider)  # 'provider' comes from --provider CLI arg
 ```
 
@@ -705,7 +705,7 @@ Add `--provider` click option:
 ```
 
 **Step 3: Update `get_review()` call** — The GeminiClient has `get_review()` which currently uses the old signature. We need to make it consistent. Either:
-- Add a `get_review(client, config)` wrapper in `src/llm/__init__.py` that dispatches to the right client
+- Add a `get_review(client, config)` wrapper in `code_reviewer/llm/__init__.py` that dispatches to the right client
 - Or modify main.py to call `client.get_review(config)` directly
 
 Option B is cleaner. The `get_review()` interface becomes part of the `LLMClient` protocol, but since chunking is specific to code review, it's better as a standalone function that takes an `LLMClient`:
@@ -720,7 +720,7 @@ def run_review(client: LLMClient, config: AiReviewConfig) -> tuple[list[str], st
 **Step 4: Commit**
 
 ```bash
-git add src/main.py src/config.py
+git add code_reviewer/main.py code_reviewer/config.py
 git commit -m "feat: wire LLM provider selection into CLI --provider flag and config"
 ```
 
@@ -828,7 +828,7 @@ git commit -m "test: add provider abstraction tests, adapt existing Gemini tests
 2. Update pre-requisites to list supported providers
 3. Add provider configuration section with examples for each
 4. Update example workflows to show multiple providers
-5. Update project structure diagram to include `src/llm/`
+5. Update project structure diagram to include `code_reviewer/llm/`
 
 **Commit:**
 
@@ -848,8 +848,8 @@ git commit -m "docs: update README with multi-provider support documentation"
 3. **Chunked review flow**: The chunking logic (split diff → review each chunk → summarize) is currently in `gemini_client.py`. We should either:
    - Make it a shared function that any provider can use
    - Or keep it in the Gemini provider and implement similar logic for others
-   
-   **Decision**: Make `run_review()` a standalone function in `src/llm/` that any provider can use, since chunking logic is provider-agnostic.
+
+   **Decision**: Make `run_review()` a standalone function in `code_reviewer/llm/` that any provider can use, since chunking logic is provider-agnostic.
 
 4. **OpenRouter**: Can be used via the `openai` provider by setting `OPENAI_BASE_URL=https://openrouter.ai/api/v1`. This gives access to ALL models (including Gemini, Claude, etc.) through one API key. Document this as the simplest path.
 
@@ -861,16 +861,16 @@ git commit -m "docs: update README with multi-provider support documentation"
 
 | File | Action | Purpose |
 |---|---|---|
-| `src/llm/__init__.py` | **Create** | Module exports |
-| `src/llm/base.py` | **Create** | LLMClient ABC, LLMConfig, LLMResponse |
-| `src/llm/provider_registry.py` | **Create** | Provider registration and factory |
-| `src/llm/gemini_client.py` | **Create** | Gemini provider (refactored from src/gemini_client.py) |
-| `src/llm/openai_client.py` | **Create** | OpenAI-compatible provider |
-| `src/llm/anthropic_client.py` | **Create** | Anthropic provider |
-| `src/gemini_client.py` | **Modify** | Thin re-export shim (backward compat) |
-| `src/config.py` | **Modify** | Provider-aware env var validation |
-| `src/main.py` | **Modify** | --provider flag, factory-based client creation |
-| `src/quota.py` | **Modify** | Remove google.genai dependency |
+| `code_reviewer/llm/__init__.py` | **Create** | Module exports |
+| `code_reviewer/llm/base.py` | **Create** | LLMClient ABC, LLMConfig, LLMResponse |
+| `code_reviewer/llm/provider_registry.py` | **Create** | Provider registration and factory |
+| `code_reviewer/llm/gemini_client.py` | **Create** | Gemini provider (refactored from code_reviewer/gemini_client.py) |
+| `code_reviewer/llm/openai_client.py` | **Create** | OpenAI-compatible provider |
+| `code_reviewer/llm/anthropic_client.py` | **Create** | Anthropic provider |
+| `code_reviewer/gemini_client.py` | **Modify** | Thin re-export shim (backward compat) |
+| `code_reviewer/config.py` | **Modify** | Provider-aware env var validation |
+| `code_reviewer/main.py` | **Modify** | --provider flag, factory-based client creation |
+| `code_reviewer/quota.py` | **Modify** | Remove google.genai dependency |
 | `action.yml` | **Modify** | New inputs for API keys and provider selection |
 | `requirements.txt` | **Modify** | Add `anthropic` SDK |
 | `README.md` | **Modify** | Multi-provider docs and examples |
@@ -883,12 +883,12 @@ git commit -m "docs: update README with multi-provider support documentation"
 
 ## Verification Checklist
 
-- [ ] `python -m src.main --help` shows `--provider` option
+- [ ] `python -m code_reviewer.main --help` shows `--provider` option
 - [ ] With `LLM_PROVIDER=gemini` + `GEMINI_API_KEY`: works exactly as before
 - [ ] With `LLM_PROVIDER=openai` + `OPENAI_API_KEY`: uses OpenAI-compatible API
 - [ ] With `LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY`: uses Anthropic
 - [ ] With `LLM_PROVIDER=openai` + `OPENAI_BASE_URL=https://openrouter.ai/api/v1`: works via OpenRouter
 - [ ] All existing `test/test_gemini_client.py` tests pass
 - [ ] New provider tests pass
-- [ ] `ruff check src/` passes
+- [ ] `ruff check code_reviewer/` passes
 - [ ] Docker build succeeds

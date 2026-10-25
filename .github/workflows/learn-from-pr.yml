@@ -28,7 +28,7 @@ jobs:
           key: review-memory-${{ github.repository }}
 
       - name: Learn from PR discussions
-        uses: Stone-IT-Cloud/gemini-code-review-action@v1
+        uses: ./
         with:
           mode: learn
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}

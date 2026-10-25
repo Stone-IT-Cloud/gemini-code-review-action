@@ -24,6 +24,7 @@ If the diff exceeds the model's context window, the Action splits it into chunks
 - `git_commit_hash` (required): PR head SHA (defaults to `${{ github.event.pull_request.head.sha }}`).
 - `model` (required): AI model name (e.g., `gemini-2.5-flash`, `openai/gpt-4o`, `anthropic/claude-sonnet-4`, `deepseek/deepseek-chat`).
 - `fallback_models` (optional): Comma-separated models tried when the primary is saturated (HTTP 5xx). Empty means the provider default: for Gemini `gemini-3.6-flash,gemini-3.5-flash-lite`; other providers get no automatic fallback.
+- `model_health_ttl_seconds` (optional): How long a model flagged as saturated is skipped by later runs (defaults to `3600`).
 - `extra_prompt` (optional): Additional system guidance to steer the review.
 - `temperature` (optional): Sampling temperature.
 - `top_p` (optional): Nucleus sampling.
@@ -61,7 +62,7 @@ The action handles it in three layers, for every provider:
 
 1. **Bounded retries.** Each model gets `LLM_MAX_ATTEMPTS` attempts (default `3`) with exponential backoff plus jitter (`LLM_INITIAL_BACKOFF_SECONDS`, default `2`; `LLM_MAX_BACKOFF_SECONDS`, default `20`).
 2. **Model fallback.** When a model exhausts its retries on 5xx, the next model in the chain is used: `model` first, then `fallback_models`, then the provider default chain. A model that answers stays selected for the rest of the run.
-3. **One-hour saturation flag.** The saturated model is flagged for `LLM_MODEL_HEALTH_TTL_SECONDS` (default `3600`) and skipped for the rest of the run instead of burning the retry budget again on every chunk.
+3. **One-hour saturation flag.** The saturated model is flagged for `model_health_ttl_seconds` (default `3600`) so later chunks and later runs skip it instead of burning the retry budget again.
 
 Requests rejected with a non-retryable status (invalid key, malformed request) are not retried and do not flag anything: only an actual 5xx is evidence of provider-side saturation.
 
@@ -72,12 +73,14 @@ with:
   fallback_models: gemini-3.6-flash,gemini-3.5-flash-lite
 ```
 
+**How the flag is shared between runs.** The composite action stores the state directory with `actions/cache` (`restore-keys: llm-model-health-`) and only saves it when the state changed. This needs no extra permissions or secrets, but GitHub scopes a cache written by a `pull_request` run to that PR's merge ref, so **other pull requests cannot restore it**: only re-runs of the same PR, plus runs on the default branch.
+
 ### Model chain environment variables
 
 - `LLM_MODEL_CHAIN`: full comma-separated chain, overriding `model` and `fallback_models`.
 - `LLM_MAX_ATTEMPTS` (default `3`): attempts per model before switching.
 - `LLM_INITIAL_BACKOFF_SECONDS` / `LLM_MAX_BACKOFF_SECONDS` (defaults `2` / `20`).
-- `LLM_MODEL_HEALTH_FILE` / `LLM_MODEL_HEALTH_TTL_SECONDS`: state location and flag lifetime. Without a file the flag lives only in memory for the current run.
+- `LLM_MODEL_HEALTH_FILE` / `LLM_MODEL_HEALTH_TTL_SECONDS`: state location and flag lifetime (the action sets these for you).
 
 ## Provider Configuration
 

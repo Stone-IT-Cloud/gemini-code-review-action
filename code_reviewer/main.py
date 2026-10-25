@@ -557,6 +557,9 @@ def main(
     # Expose outputs to workflows
     write_github_output("review_result", review_comment)
     write_github_output("entire_prompt_body", get_review_prompt(extra_prompt=extra_prompt))
+    # Signal to the composite action whether the model-health state changed and
+    # is therefore worth saving into the cross-run cache.
+    write_github_output("model_health_dirty", "true" if health.dirty else "false")
 
     if os.getenv("LOCAL") is not None:
         # Never returns: it prints the review and exits 0, or 1 on critical findings.

@@ -514,14 +514,15 @@ def main(
 
     check_required_env_vars()
 
-    # Resolve diff from the appropriate source
-    diff = _resolve_diff_source(local, files, diff_file)
-
     # Set up LLM client via provider abstraction
     client = get_llm_client(provider=provider)
 
+    # Learn mode analyses closed PRs; it never reads the diff of the current one.
     if _run_learn_mode(mode, client, review_memory_path):
         return
+
+    # Resolve diff from the appropriate source
+    diff = _resolve_diff_source(local, files, diff_file)
 
     context = _collect_ci_context(diff, review_memory_enabled, review_memory_path)
 

@@ -70,6 +70,10 @@ inputs:
       gemini-3.5-flash-lite; other providers: no automatic fallback).
     required: false
     default: ""
+  model_health_ttl_seconds:
+    description: "How long (seconds) a model flagged as saturated is skipped by later runs"
+    required: false
+    default: "3600"
   extra_prompt:
     description: "Extra prompt for Gemini"
     required: false
@@ -151,6 +155,17 @@ runs:
         set -euo pipefail
         printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 
+    - name: "Restore model health state"
+      id: model-health-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/llm-model-health
+        # Unique key per run + prefix restore: cache entries are immutable, so a
+        # new key is the only way to publish updated state.
+        key: llm-model-health-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          llm-model-health-
+
     - name: "Build action image"
       shell: bash
       env:
@@ -174,6 +189,8 @@ runs:
         PR_DIFF_CHUNK_SIZE: ${{ inputs.pull_request_chunk_size }}
         MODEL: ${{ inputs.model }}
         FALLBACK_MODELS: ${{ inputs.fallback_models }}
+        MODEL_HEALTH_DIR: ${{ runner.temp }}/llm-model-health
+        MODEL_HEALTH_TTL_SECONDS: ${{ inputs.model_health_ttl_seconds }}
         EXTRA_PROMPT: ${{ inputs.extra_prompt }}
         TEMPERATURE: ${{ inputs.temperature }}
         TOP_P: ${{ inputs.top_p }}
@@ -191,10 +208,15 @@ runs:
 
         DIFF_FILE="${PR_DIFF_FILE}"
 
+        # Cross-run model health state (1h saturation flags).
+        HEALTH_DIR="${MODEL_HEALTH_DIR:-${RUNNER_TEMP:-/tmp}/llm-model-health}"
+        mkdir -p "${HEALTH_DIR}"
+
         # Ensure the diff file is accessible inside the container:
         # - Always mount the workspace (at the same absolute path)
         # - Mount /tmp (common for workflows that write diffs to /tmp)
         VOLUMES=( "-v" "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" "-v" "/tmp:/tmp" )
+        VOLUMES+=( "-v" "${HEALTH_DIR}:${HEALTH_DIR}" )
 
         # If an absolute diff path is provided outside workspace/tmp, mount its directory too.
         if [[ "${DIFF_FILE}" = /* ]]; then
@@ -243,6 +265,8 @@ runs:
           -e MODE \
           -e LOCAL \
           -e GITHUB_OUTPUT \
+          -e LLM_MODEL_HEALTH_FILE="${HEALTH_DIR}/health.json" \
+          -e LLM_MODEL_HEALTH_TTL_SECONDS="${MODEL_HEALTH_TTL_SECONDS}" \
           -e ENGRAM_DIR \
           -e ENGRAM_ENABLED \
           -e TEST_RESULTS_PATH \
@@ -250,3 +274,10 @@ runs:
           -e BUGBOT_RESULTS_PATH \
           "$ACTION_IMAGE_TAG" \
           "${ARGS[@]}"
+
+    - name: "Save model health state"
+      if: ${{ always() && steps.gpt.outputs.model_health_dirty == 'true' }}
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/llm-model-health
+        key: llm-model-health-${{ github.run_id }}-${{ github.run_attempt }}

@@ -165,8 +165,8 @@ class TestFormatReviewCommentWithSummary:
         assert "TRIVIAL" in result
         assert "a.py" in result
 
-    def test_clean_message_when_no_issues(self):
-        """When there are no valid items, show a clean message instead of raw JSON."""
+    def test_nothing_to_report_returns_empty_comment(self):
+        """A clean review must produce no comment at all (no tokens spent)."""
         from code_reviewer.review_formatter import format_review_comment
 
         result = format_review_comment(
@@ -174,7 +174,75 @@ class TestFormatReviewCommentWithSummary:
             chunked_reviews=["[]"],
             min_severity="important",
         )
-        assert "✅" in result
-        assert "no issues found" in result.lower()
-        assert "IMPORTANT" in result
-        assert result.strip().startswith("✅")
+        assert result == ""
+
+
+class TestMalformedModelOutput:
+    """Raw JSON must never reach the pull request, and the header must match."""
+
+    DIFF = "--- a/a.py\n+++ b/a.py\n@@ -1 +1,2 @@\n+new\n"
+
+    def test_truncated_json_is_rendered_not_dumped(self):
+        from code_reviewer.review_formatter import format_review_comment
+
+        payload = (
+            '[{"file": "a.py", "line": 1, "severity": "critical", "comment": "Real bug"},'
+            '{"file": "b.py", "line": 2, "severity": "trivial", "comment": "Nit"'
+        )
+
+        result = format_review_comment(
+            summarized_review=payload,
+            chunked_reviews=[payload],
+            min_severity="trivial",
+            diff=self.DIFF,
+        )
+
+        assert '"severity"' not in result
+        assert result.strip().startswith("📋 Review:")
+        assert "🔴 1 CRITICAL" in result
+        assert "No issues found" not in result
+
+    def test_readable_payload_never_claims_no_issues(self):
+        from code_reviewer.review_formatter import format_review_comment
+
+        payload = '[{"file": "a.py", "line": 1, "severity": "important", "comment": "Off by one"}]'
+
+        result = format_review_comment(
+            summarized_review=payload,
+            chunked_reviews=[payload],
+            min_severity="trivial",
+            diff=self.DIFF,
+        )
+
+        assert "🟡 1 IMPORTANT" in result
+        assert "No issues found" not in result
+
+    def test_unreadable_payload_reports_unavailable(self):
+        from code_reviewer.review_formatter import format_review_comment
+
+        payload = '[{"file": "a.py", "line": 1, "severity": "critical", "comment": "Cut off'
+
+        result = format_review_comment(
+            summarized_review=payload,
+            chunked_reviews=[payload],
+            min_severity="trivial",
+            diff=self.DIFF,
+        )
+
+        assert "could not be parsed" in result
+        assert '"severity"' not in result
+        assert "No issues found" not in result
+
+    def test_unreadable_payload_without_diff_still_explains(self):
+        from code_reviewer.review_formatter import format_review_comment
+
+        payload = "[{oops"
+
+        result = format_review_comment(
+            summarized_review=payload,
+            chunked_reviews=[payload],
+            min_severity="trivial",
+        )
+
+        assert "could not be parsed" in result
+        assert result.strip().startswith("⚠️")

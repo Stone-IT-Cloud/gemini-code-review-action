@@ -74,9 +74,14 @@ REVIEW_SYSTEM_PROMPT = (
     "put natural language descriptions, explanations, or advice in suggestion. "
     "Never use unified diff format (no ---, +++, @@, or +/- line prefixes). "
     "If you cannot provide a concrete code fix, omit suggestion or set it to null.\n"
-    "If you find no issues worthy of a review comment, produce a single item "
-    "with severity 'trivial', an empty file field, and a comment summarizing "
-    "what looks good and why the changes are acceptable.\n"
+    "Report defects only. Never praise the change and never describe what is "
+    "good, clean or well-structured: every item must name a concrete problem "
+    "in the changed code.\n"
+    "Do not speculate. Only report a defect when you can state what breaks and "
+    "under which input; if you cannot, omit the item entirely.\n"
+    "If you find no defects, emit exactly one item with an empty file field "
+    "and a one-line comment stating that no defects were found. Do not emit any "
+    "other item in that case.\n"
     "Do not add any text before or after the JSON array."
 )
 
@@ -341,6 +346,28 @@ def _unwrap_review_dict(parsed: dict) -> list:
     return [parsed]
 
 
+def recover_json_objects(text: str) -> list:
+    """Extract complete top-level objects from a malformed or truncated array.
+
+    The model occasionally returns an array that is cut off, or that is missing a
+    separator between two objects. Decoding object by object keeps every payload
+    that is intact and drops only the broken tail.
+    """
+    decoder = json.JSONDecoder()
+    objects: list = []
+    index = text.find("{")
+    while index != -1:
+        try:
+            candidate, end = decoder.raw_decode(text, index)
+        except json.JSONDecodeError:
+            index = text.find("{", index + 1)
+            continue
+        if isinstance(candidate, dict):
+            objects.append(candidate)
+        index = text.find("{", end)
+    return objects
+
+
 def parse_review_response(text: str | None) -> list[dict]:
     """Parse a Gemini review response into a list of validated review items.
 
@@ -357,12 +384,15 @@ def parse_review_response(text: str | None) -> list[dict]:
 
     try:
         parsed = json.loads(cleaned)
-    except json.JSONDecodeError:
-        logger.warning(
-            "Failed to parse model response as JSON; returning no review items. " "Response preview: %s",
-            cleaned[:200],
-        )
-        return []
+    except json.JSONDecodeError as exc:
+        recovered = recover_json_objects(cleaned)
+        if not recovered:
+            logger.warning(f"Failed to parse model response as JSON ({exc}); preview: {cleaned[:200]}")
+            return []
+        # A truncated or missing-comma payload still carries usable items; keep
+        # the ones that are complete instead of discarding the whole review.
+        logger.warning(f"Model response was not valid JSON ({exc}); recovered {len(recovered)} object(s)")
+        parsed = recovered
 
     if isinstance(parsed, dict):
         parsed = _unwrap_review_dict(parsed)
@@ -377,5 +407,5 @@ def parse_review_response(text: str | None) -> list[dict]:
         if validated is not None:
             results.append(validated)
 
-    logger.info("Parsed %d valid review item(s) from model response.", len(results))
+    logger.info(f"Parsed {len(results)} valid review item(s) from model response.")
     return results

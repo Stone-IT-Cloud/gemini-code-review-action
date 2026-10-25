@@ -331,6 +331,35 @@ class TestParseReviewResponseMalformed:
         assert result[0]["file"] == "a.py"
 
 
+class TestParseReviewResponseRecovery:
+    """A truncated or badly separated array must not discard the whole review."""
+
+    def test_truncated_array_keeps_complete_objects(self):
+        text = (
+            '[{"file": "a.py", "line": 1, "severity": "critical", "comment": "X"},'
+            '{"file": "b.py", "line": 2, "severity": "trivial", "comment": "Y"'
+        )
+
+        result = parse_review_response(text)
+
+        assert [item["file"] for item in result] == ["a.py"]
+
+    def test_missing_comma_between_objects(self):
+        text = (
+            '[{"file": "a.py", "line": 1, "severity": "critical", "comment": "X"}'
+            '{"file": "b.py", "line": 2, "severity": "trivial", "comment": "Y"}]'
+        )
+
+        result = parse_review_response(text)
+
+        assert [item["file"] for item in result] == ["a.py", "b.py"]
+
+    def test_recovered_objects_are_still_validated(self):
+        text = '[{"file": "", "line": 0, "severity": "trivial", "comment": "X"}'
+
+        assert not parse_review_response(text)
+
+
 # ---------------------------------------------------------------------------
 # REVIEW_SYSTEM_PROMPT
 # ---------------------------------------------------------------------------
@@ -352,6 +381,15 @@ class TestReviewSystemPrompt:
     def test_no_longer_mentions_empty_array(self):
         """R2: Prompt MUST NOT contain any [] empty-output instruction."""
         assert "[]" not in REVIEW_SYSTEM_PROMPT
+
+    def test_forbids_praise_items(self):
+        assert "Never praise the change" in REVIEW_SYSTEM_PROMPT
+
+    def test_defines_the_no_defects_marker(self):
+        assert "no defects were found" in REVIEW_SYSTEM_PROMPT
+
+    def test_forbids_speculative_findings(self):
+        assert "Do not speculate" in REVIEW_SYSTEM_PROMPT
 
     def test_suggestion_must_be_code_not_prose_or_diff(self):
         assert "exact replacement code" in REVIEW_SYSTEM_PROMPT

@@ -16,11 +16,20 @@ import re
 
 from loguru import logger
 
-from code_reviewer.review_parser import parse_review_response, strip_markdown_fences
+from code_reviewer.review_parser import (
+    parse_review_response,
+    recover_json_objects,
+    strip_markdown_fences,
+)
 from code_reviewer.utils import create_suggestion_fence
 
 # Severity mapping for filtering
 SEVERITY_MAP = {"trivial": 1, "important": 2, "critical": 3}
+
+UNPARSED_SUMMARY = "⚠️ Review unavailable — the model response could not be parsed."
+UNPARSED_NOTICE = (
+    "No review items could be extracted from the model output. " "The raw payload is available in the action logs."
+)
 
 
 def filter_by_severity(items: list[dict], min_severity: str) -> list[dict]:
@@ -83,14 +92,29 @@ def _collect_review_items(chunked_reviews: list[str]) -> tuple[list[dict], bool]
         if parsed:
             all_items.extend(parsed)
             any_parsed = True
-        else:
-            cleaned = strip_markdown_fences(chunk_text) if chunk_text else ""
-            try:
-                json.loads(cleaned)
-                any_parsed = True
-            except (json.JSONDecodeError, TypeError):
-                pass
+        elif _is_json_payload(chunk_text):
+            # Valid JSON whose items all failed validation is still a JSON answer,
+            # not an unreadable payload: the caller must not treat it as a crash.
+            any_parsed = True
     return all_items, any_parsed
+
+
+def _is_json_payload(text: str | None) -> bool:
+    """Whether *text* carries JSON we could at least read (valid or recoverable)."""
+    cleaned = strip_markdown_fences(text or "").strip()
+    if not cleaned.startswith(("[", "{")):
+        return False
+    try:
+        json.loads(cleaned)
+        return True
+    except json.JSONDecodeError:
+        return bool(recover_json_objects(cleaned))
+
+
+def _is_unparseable_json(text: str | None) -> bool:
+    """Whether *text* looks like JSON but nothing usable could be extracted."""
+    cleaned = strip_markdown_fences(text or "").strip()
+    return cleaned.startswith(("[", "{")) and not _is_json_payload(text)
 
 
 # ---------------------------------------------------------------------------
@@ -169,16 +193,28 @@ def _structured_body(
     chunked_reviews: list[str],
     summarized_review: str,
     min_severity: str,
-) -> tuple[str, list[dict]]:
-    """Resolve the per-item body, falling back to raw text when nothing parses."""
+) -> tuple[str, list[dict], bool]:
+    """Resolve the per-item body and report whether the payload was unreadable.
+
+    Returns:
+        ``(body, items, unparsed)``. ``unparsed`` is True when the model
+        answered with JSON that could not be read at all, so the caller can say
+        so instead of claiming there were no issues.
+    """
     all_items, any_parsed = _collect_review_items(chunked_reviews)
     if all_items and min_severity:
         all_items = filter_by_severity(all_items, min_severity)
     if all_items:
-        return "\n\n".join(_format_item_line(item) for item in all_items), all_items
+        return "\n\n".join(_format_item_line(item) for item in all_items), all_items, False
     if any_parsed:
-        return _fallback_from_summary(summarized_review, min_severity)
-    return ("\n".join(chunked_reviews) if chunked_reviews else ""), all_items
+        body, items = _fallback_from_summary(summarized_review, min_severity)
+        return body, items, False
+
+    raw_text = "\n".join(chunked_reviews) if chunked_reviews else ""
+    if _is_unparseable_json(raw_text):
+        logger.warning("Model returned JSON that could not be parsed; suppressing the raw payload")
+        return "", [], True
+    return raw_text, [], False
 
 
 def _fallback_from_summary(summarized_review: str, min_severity: str) -> tuple[str, list[dict]]:
@@ -212,19 +248,23 @@ def format_review_comment(
               header is prepended.
 
     Returns:
-        Formatted review comment string.
+        Formatted review comment string. Raw JSON is never echoed back.
     """
-    structured_body, all_items = _structured_body(chunked_reviews, summarized_review, min_severity)
-    body = _wrap_body(structured_body, summarized_review, chunked_reviews)
+    structured_body, all_items, unparsed = _structured_body(chunked_reviews, summarized_review, min_severity)
+    if unparsed:
+        # Say what happened instead of echoing a payload we could not read.
+        return f"{UNPARSED_SUMMARY}\n\n---\n\n{UNPARSED_NOTICE}"
 
+    body = _wrap_body(structured_body, summarized_review, chunked_reviews)
     if diff is not None:
         summary = build_review_summary(all_items=all_items, diff_stats=_parse_diff_stats(diff))
         if summary:
-            body = f"{summary}\n\n---\n\n{body}"
+            body = f"{summary}\n\n---\n\n{body}" if body.strip() else summary
 
-    if not body.strip() or body.strip().startswith("["):
-        level_label = min_severity.upper() if min_severity else "TRIVIAL"
-        body = f"✅ Code review complete — no issues found at **{level_label}** level."
+    if not body.strip():
+        # Nothing to correct: stay silent so no comment (and no tokens) is spent.
+        logger.info("No review findings; returning an empty comment so nothing is posted")
+        return ""
     return body
 
 
@@ -238,7 +278,7 @@ def _wrap_body(
         return f"<details>\n    <summary>{summarized_review}</summary>\n    {structured_body}\n    </details>"
     if structured_body:
         return structured_body
-    stripped = summarized_review.strip()
-    if stripped.startswith("[") or stripped.startswith("{"):
+    if _is_json_payload(summarized_review):
+        # Never echo the model's raw JSON back to the pull request.
         return ""
     return summarized_review

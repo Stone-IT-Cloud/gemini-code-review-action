@@ -390,6 +390,9 @@ def _dispatch_ci_output(
                 git_commit_hash=git_commit_hash,
             )
     else:
+        if not review_comment.strip():
+            logger.info("No review findings and no summary; nothing to post.")
+            return
         logger.info("No review items found, posting summary only")
         _post_single_review_comment(
             body=review_comment,
@@ -545,8 +548,8 @@ def main(
     write_github_output("entire_prompt_body", get_review_prompt(extra_prompt=extra_prompt))
 
     if os.getenv("LOCAL") is not None:
+        # Never returns: it prints the review and exits 0, or 1 on critical findings.
         _dispatch_local_output(filtered_items, summarized_review, min_severity)
-        return  # _dispatch_local_output calls sys.exit
 
     _dispatch_ci_output(
         filtered_items=filtered_items,

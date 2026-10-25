@@ -178,6 +178,8 @@ Or via the generic `openai` provider (any OpenAI-compatible API):
 - Reads existing PR comments and reviews using PyGithub and injects them into the AI context so prior feedback is respected.
 - Configurable prompt, model, and chunk size.
 - **Severity-based filtering** to reduce noise from trivial suggestions (see [Severity Filtering](#severity-filtering)).
+- **Silent when clean**: if the review finds nothing to correct, no comment is posted and `review_result` is empty. The model is explicitly forbidden from emitting praise or summary items.
+- **Always formatted**: review findings are rendered as readable items. If the model returns malformed or truncated JSON, the intact items are recovered; if nothing can be recovered, the comment says so instead of dumping the raw payload.
 - **Cross-PR review memory**: Remembers past review decisions using Engram's native chunk format (``.engram/chunks/*.jsonl.gz``). The ``.engram/`` directory is cached via GitHub Actions cache, so the action won't repeat suggestions that were already rejected in previous PRs. The same cache can be imported locally with ``engram sync --import`` from the cloned repo.
 
   **Usage with GitHub Actions cache:**

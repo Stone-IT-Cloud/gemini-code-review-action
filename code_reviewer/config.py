@@ -82,6 +82,5 @@ def check_required_env_vars() -> None:
         value = os.getenv(var)
         if value is None or not value.strip():
             raise ValueError(
-                f"{var} is not set or is empty. "
-                f"This variable is required when LLM_PROVIDER={provider!r}."
+                f"{var} is not set or is empty. " f"This variable is required when LLM_PROVIDER={provider!r}."
             )

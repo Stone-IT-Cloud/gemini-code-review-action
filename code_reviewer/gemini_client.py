@@ -32,7 +32,7 @@ from code_reviewer.utils import calculate_char_budget, chunk_string
 
 
 def get_review(client: Any, config: dict) -> tuple[list[str], str]:
-    """Backward-compat wrapper for get_review().
+    """Delegate a review to :class:`GeminiClient` (backward-compatible wrapper).
 
     Accepts a raw genai.Client and an AiReviewConfig dict,
     creates a GeminiClient around it, and delegates to
@@ -43,6 +43,6 @@ def get_review(client: Any, config: dict) -> tuple[list[str], str]:
 
 
 def get_model_context_limit(client: Any, model_name: str) -> int:
-    """Backward-compat wrapper for get_model_context_limit()."""
+    """Return the model context limit (backward-compatible wrapper)."""
     gc = GeminiClient(client)
     return gc.get_context_limit(model_name)

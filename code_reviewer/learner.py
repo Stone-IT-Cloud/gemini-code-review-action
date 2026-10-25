@@ -105,12 +105,14 @@ def run(
         reply = replies[0].get("body", "")
         decision = _classify_decision(suggestion, reply, llm_client)
 
-        decisions.append({
-            "suggestion": suggestion,
-            "file_pattern": comment.get("path", "*"),
-            "decision": decision,
-            "reason": reply[:200],
-        })
+        decisions.append(
+            {
+                "suggestion": suggestion,
+                "file_pattern": comment.get("path", "*"),
+                "decision": decision,
+                "reason": reply[:200],
+            }
+        )
 
     if decisions:
         stored = store_decisions_batch(
@@ -156,7 +158,9 @@ def _fetch_bot_comments(
     per_page = 100
     while True:
         response = requests.get(
-            url, headers=headers, timeout=30,
+            url,
+            headers=headers,
+            timeout=30,
             params={"per_page": per_page, "page": page},
         )
         response.raise_for_status()
@@ -182,20 +186,22 @@ def _fetch_bot_comments(
         if not replies:
             continue  # skip bot comments nobody replied to
 
-        bot_comments.append({
-            "id": comment["id"],
-            "user": comment["user"],
-            "body": comment.get("body", ""),
-            "path": comment.get("path", ""),
-            "line": comment.get("line", 0),
-            "replies": [
-                {
-                    "user": r["user"],
-                    "body": r.get("body", ""),
-                }
-                for r in replies
-            ],
-        })
+        bot_comments.append(
+            {
+                "id": comment["id"],
+                "user": comment["user"],
+                "body": comment.get("body", ""),
+                "path": comment.get("path", ""),
+                "line": comment.get("line", 0),
+                "replies": [
+                    {
+                        "user": r["user"],
+                        "body": r.get("body", ""),
+                    }
+                    for r in replies
+                ],
+            }
+        )
 
     return bot_comments
 
@@ -298,9 +304,7 @@ def _parse_pr_number(value: str | None) -> int:
     env_val = os.getenv("GITHUB_PULL_REQUEST_NUMBER")
     if env_val:
         return int(env_val)
-    raise ValueError(
-        "PR number not provided and GITHUB_PULL_REQUEST_NUMBER env var not set"
-    )
+    raise ValueError("PR number not provided and GITHUB_PULL_REQUEST_NUMBER env var not set")
 
 
 def _clean_suggestion(body: str) -> str:

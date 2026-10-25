@@ -35,12 +35,9 @@ Schema — ``observations`` table::
 
 from __future__ import annotations
 
-import gzip
 import hashlib
-import json
-import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -270,7 +267,7 @@ def query_similar(
         if not terms:
             return []
 
-        query = f"""
+        query = """
             SELECT o.id, o.title, o.content, o.topic_key, o.created_at,
                    rank
             FROM observations_fts
@@ -313,23 +310,124 @@ def _fts_terms(text: str) -> str:
 
     # Remove common boilerplate
     stop_words = {
-        "the", "a", "an", "is", "are", "was", "were", "be", "been",
-        "being", "have", "has", "had", "do", "does", "did", "will",
-        "would", "could", "should", "may", "might", "shall", "can",
-        "to", "of", "in", "for", "on", "with", "at", "by", "from",
-        "as", "into", "through", "during", "before", "after", "above",
-        "below", "between", "out", "off", "over", "under", "again",
-        "further", "then", "once", "here", "there", "when", "where",
-        "why", "how", "all", "each", "every", "both", "few", "more",
-        "most", "other", "some", "such", "no", "nor", "not", "only",
-        "own", "same", "so", "than", "too", "very", "just", "because",
-        "but", "and", "or", "if", "while", "about", "up",
-        "this", "that", "these", "those",
-        "use", "used", "using", "get", "got", "make", "made",
-        "need", "needs", "please", "consider", "should", "must",
-        "also", "already", "always", "never", "ever",
-        "code", "function", "class", "method", "variable", "file",
-        "line", "change", "changes", "added", "removed", "updated",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "shall",
+        "can",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "as",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "between",
+        "out",
+        "off",
+        "over",
+        "under",
+        "again",
+        "further",
+        "then",
+        "once",
+        "here",
+        "there",
+        "when",
+        "where",
+        "why",
+        "how",
+        "all",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "nor",
+        "not",
+        "only",
+        "own",
+        "same",
+        "so",
+        "than",
+        "too",
+        "very",
+        "just",
+        "because",
+        "but",
+        "and",
+        "or",
+        "if",
+        "while",
+        "about",
+        "up",
+        "this",
+        "that",
+        "these",
+        "those",
+        "use",
+        "used",
+        "using",
+        "get",
+        "got",
+        "make",
+        "made",
+        "need",
+        "needs",
+        "please",
+        "consider",
+        "must",
+        "also",
+        "already",
+        "always",
+        "never",
+        "ever",
+        "code",
+        "function",
+        "class",
+        "method",
+        "variable",
+        "file",
+        "line",
+        "change",
+        "changes",
+        "added",
+        "removed",
+        "updated",
     }
 
     clean = re.sub(r"[^a-zA-Z0-9\s]", " ", text.lower())
@@ -343,6 +441,28 @@ def _fts_terms(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _dedupe_decisions(rejected: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deduplicate by content hash, keeping the most recent occurrences."""
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for decision in reversed(rejected[-30:]):
+        content_hash = _content_hash(decision.get("content", ""))
+        if content_hash not in seen:
+            seen.add(content_hash)
+            unique.append(decision)
+    return unique
+
+
+def _decision_line(decision: dict[str, Any]) -> str:
+    """Render one rejected suggestion as a single prompt line."""
+    suggestion = (decision.get("content") or decision.get("title", ""))[:100]
+    reason = (decision.get("reason") or "")[:150]
+    entry = f'\n- REJECTED in PR #{decision.get("pr", "?")}: "{suggestion}"'
+    if reason:
+        entry += f" — {reason}"
+    return entry
+
+
 def build_context(
     decisions: list[dict[str, Any]],
     similar: list[dict[str, Any]] | None = None,
@@ -353,40 +473,23 @@ def build_context(
     Token-minimised:  only rejected/wont-fix decisions are included,
     truncated to fit within *max_chars*.
     """
-    rejected = [
-        d for d in decisions if d.get("decision") in ("rejected", "wont-fix")
-    ]
-    # Deduplicate by suggestion hash
-    seen: set[str] = set()
-    unique: list[dict[str, Any]] = []
-    for d in reversed(rejected[-30:]):
-        h = _content_hash(d.get("content", ""))
-        if h not in seen:
-            seen.add(h)
-            unique.append(d)
-
+    del similar  # accepted for API compatibility; decisions carry the data today
+    rejected = [d for d in decisions if d.get("decision") in ("rejected", "wont-fix")]
+    unique = _dedupe_decisions(rejected)
     if not unique:
         return ""
 
-    lines = ["\n[Past review decisions — DO NOT repeat rejected suggestions]"]
-    char_count = len(lines[0])
-
-    for d in unique:
-        suggestion = (d.get("content") or d.get("title", ""))[:100]
-        reason = (d.get("reason") or "")[:150]
-        pr = d.get("pr", "?")
-        entry = f"\n- REJECTED in PR #{pr}: \"{suggestion}\""
-        if reason:
-            entry += f" — {reason}"
+    header = "\n[Past review decisions — DO NOT repeat rejected suggestions]"
+    lines = [header]
+    char_count = len(header)
+    for decision in unique:
+        entry = _decision_line(decision)
         if char_count + len(entry) > max_chars:
             break
         lines.append(entry)
         char_count += len(entry)
 
-    lines.append(
-        "\nThe suggestions above were already reviewed and rejected. "
-        "Do NOT repeat them."
-    )
+    lines.append("\nThe suggestions above were already reviewed and rejected. Do NOT repeat them.")
     return "".join(lines)
 
 
@@ -415,15 +518,13 @@ def store_decision(
     ensure_engram(engram_dir)
     conn = _db(engram_dir)
     try:
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         _session_id = session_id or f"pr-{pr_number}"
         _sync_id = f"obs-{uuid4().hex[:16]}"
 
         # topic_key encodes structured info:  review:decision:reason:pr
         _reason = reason.replace(":", " ")[:200]
-        topic_key = (
-            f"{_SUGGESTION_HASH_PREFIX}{decision}:{_reason}:{pr_number}"
-        )
+        topic_key = f"{_SUGGESTION_HASH_PREFIX}{decision}:{_reason}:{pr_number}"
 
         conn.execute(
             """
@@ -460,10 +561,7 @@ def store_decision(
 
         conn.commit()
         obs_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        logger.info(
-            f"Stored review decision #{obs_id}: {decision} — "
-            f"{suggestion[:60]}"
-        )
+        logger.info(f"Stored review decision #{obs_id}: {decision} — " f"{suggestion[:60]}")
         return obs_id
     finally:
         conn.close()
@@ -490,7 +588,7 @@ def store_decisions_batch(
     ensure_engram(engram_dir)
     conn = _db(engram_dir)
     try:
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         _session_id = session_id or f"pr-{pr_number}"
 
         conn.execute(
@@ -507,10 +605,7 @@ def store_decisions_batch(
             suggestion = dec.get("suggestion", "")
             decision = dec.get("decision", "pending")
             reason = dec.get("reason", "")
-            topic_key = (
-                f"{_SUGGESTION_HASH_PREFIX}{decision}:"
-                f"{reason.replace(':', ' ')[:200]}:{pr_number}"
-            )
+            topic_key = f"{_SUGGESTION_HASH_PREFIX}{decision}:" f"{reason.replace(':', ' ')[:200]}:{pr_number}"
             conn.execute(
                 """
                 INSERT INTO observations

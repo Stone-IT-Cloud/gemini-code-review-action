@@ -21,8 +21,7 @@ from code_reviewer.learner import (
     _parse_pr_number,
     run,
 )
-from code_reviewer.review_memory import ensure_engram, observation_count, store_decision
-
+from code_reviewer.review_memory import observation_count
 
 # ---------------------------------------------------------------------------
 # _parse_pr_number
@@ -47,7 +46,7 @@ class TestParsePrNumber:
     def test_raises_when_not_found(self):
         try:
             _parse_pr_number(None)
-            assert False, "Should have raised"
+            raise AssertionError("Should have raised")
         except ValueError:
             pass
 
@@ -89,9 +88,7 @@ class TestFetchBotComments:
         ]
         mock_get.return_value.status_code = 200
 
-        comments = _fetch_bot_comments(
-            github_token="test", repo="owner/repo", pr_number=1
-        )
+        comments = _fetch_bot_comments(github_token="test", repo="owner/repo", pr_number=1)
         assert len(comments) == 1
         assert comments[0]["id"] == 1
         assert len(comments[0]["replies"]) == 1
@@ -119,9 +116,7 @@ class TestFetchBotComments:
         ]
         mock_get.return_value.status_code = 200
 
-        comments = _fetch_bot_comments(
-            github_token="test", repo="owner/repo", pr_number=1
-        )
+        comments = _fetch_bot_comments(github_token="test", repo="owner/repo", pr_number=1)
         assert len(comments) == 1
         assert len(comments[0]["replies"]) == 1
         assert comments[0]["replies"][0]["body"] == "No aplica, usamos formato legacy"
@@ -169,9 +164,7 @@ class TestRun:
                 "body": "Use f-strings instead of percent formatting",
                 "path": "src/main.py",
                 "line": 5,
-                "replies": [
-                    {"user": {"login": "alecavallo"}, "body": "No aplica"}
-                ],
+                "replies": [{"user": {"login": "alecavallo"}, "body": "No aplica"}],
             },
         ]
 
@@ -219,16 +212,15 @@ class TestFetchBotCommentsPagination:
     @patch("code_reviewer.learner.requests.get")
     def test_fetches_multiple_pages(self, mock_get):
         """Returns 150 comments across 2 pages, expects both pages fetched."""
-        page1 = [{"id": i, "user": {"login": "github-actions[bot]"}, "body": f"Suggestion {i}"} for i in range(100)]
-        page2 = [{"id": i + 100, "user": {"login": "github-actions[bot]"}, "body": f"Suggestion {i}"} for i in range(50)]
+        bot = {"login": "github-actions[bot]"}
+        page1 = [{"id": i, "user": bot, "body": f"Suggestion {i}"} for i in range(100)]
+        page2 = [{"id": i + 100, "user": bot, "body": f"Suggestion {i}"} for i in range(50)]
 
         # First call returns page1, second returns page2, third returns empty
         mock_get.return_value.json.side_effect = [page1, page2, []]
         mock_get.return_value.status_code = 200
 
-        comments = _fetch_bot_comments(
-            github_token="test", repo="owner/repo", pr_number=1
-        )
+        comments = _fetch_bot_comments(github_token="test", repo="owner/repo", pr_number=1)
         # Without replies, comments without replies are filtered out → empty
         assert isinstance(comments, list)
         # Verify the function fetched all pages (3rd is empty → stop)

@@ -14,6 +14,7 @@ from code_reviewer.llm.base import LLMConfig
 class TestAnthropicRegistration:
     def test_anthropic_is_registered(self):
         from code_reviewer.llm import list_providers
+
         assert "anthropic" in list_providers()
 
 
@@ -85,11 +86,12 @@ class TestAnthropicFactory:
             assert client._base_url == "https://api.anthropic.com/v1"
 
     def test_from_env_with_custom_url(self):
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test", "ANTHROPIC_BASE_URL": "https://custom.anthropic.com/v1"}):
+        with patch.dict(
+            "os.environ", {"ANTHROPIC_API_KEY": "sk-test", "ANTHROPIC_BASE_URL": "https://custom.anthropic.com/v1"}
+        ):
             client = AnthropicClient.from_env()
             assert client._base_url == "https://custom.anthropic.com/v1"
 
     def test_missing_key_raises(self):
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
-                AnthropicClient.from_env()
+        with patch.dict("os.environ", {}, clear=True), pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+            AnthropicClient.from_env()

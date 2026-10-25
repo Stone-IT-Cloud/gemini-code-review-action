@@ -14,6 +14,7 @@
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -22,14 +23,14 @@ from github.GithubException import GithubException
 from loguru import logger
 
 from code_reviewer.config import AiReviewConfig, check_required_env_vars
-from code_reviewer.llm import get_llm_client
-from code_reviewer.llm.review import run_review
 from code_reviewer.github_client import (
     create_a_comment_to_pull_request,
     create_inline_review_comments,
     get_all_pr_comments_text,
     write_github_output,
 )
+from code_reviewer.llm import LLMClient, get_llm_client
+from code_reviewer.llm.review import run_review
 from code_reviewer.prompts import get_review_prompt
 from code_reviewer.review_formatter import filter_by_severity, format_review_comment
 from code_reviewer.review_parser import parse_review_response
@@ -425,8 +426,7 @@ def _dispatch_ci_output(
 @click.option(
     "--provider",
     type=click.Choice(
-        ["gemini", "openai", "openrouter", "deepseek", "qwen", "kimi",
-         "baichuan", "zhipu", "anthropic"],
+        ["gemini", "openai", "openrouter", "deepseek", "qwen", "kimi", "baichuan", "zhipu", "anthropic"],
         case_sensitive=False,
     ),
     required=False,
@@ -508,97 +508,10 @@ def main(
     # Set up LLM client via provider abstraction
     client = get_llm_client(provider=provider)
 
-    # ── Learn mode: analyse closed PR discussions ────────────────────
-    if mode == "learn":
-        from code_reviewer.learner import _parse_pr_number, run as learner_run
-
-        pr_number = _parse_pr_number(None)
-        repo = os.getenv("GITHUB_REPOSITORY", "")
-        engram_dir = (
-            review_memory_path
-            or os.getenv("ENGRAM_DIR", "")
-            or ".engram"
-        )
-        result = learner_run(
-            github_token=os.getenv("GITHUB_TOKEN", ""),
-            repo=repo,
-            pr_number=pr_number,
-            engram_dir=engram_dir,
-            llm_client=client,          # LLM-based classification, falls back to keywords on error
-        )
-        logger.info(f"Learn complete: {result}")
+    if _run_learn_mode(mode, client, review_memory_path):
         return
 
-    # ── Learn mode: analyse closed PR discussions ────────────────────
-    if mode == "learn":
-        from code_reviewer.learner import _parse_pr_number, run as learner_run
-
-        pr_number = _parse_pr_number(None)
-        repo = os.getenv("GITHUB_REPOSITORY", "")
-        engram_dir = (
-            review_memory_path
-            or os.getenv("ENGRAM_DIR", "")
-            or ".engram"
-        )
-        result = learner_run(
-            github_token=os.getenv("GITHUB_TOKEN", ""),
-            repo=repo,
-            pr_number=pr_number,
-            engram_dir=engram_dir,
-            llm_client=client,          # LLM-based classification, falls back to keywords on error
-        )
-        logger.info(f"Learn complete: {result}")
-        return
-
-    # Resolve CI-only env vars (only when not in local mode)
-    comments_text = ""
-    _github_token = ""
-    _github_repo = ""
-    _pr_number = 0
-    _commit_hash = ""
-    review_memory_context = ""
-    supplemental_context = ""
-    engram_enabled = review_memory_enabled and (
-        os.getenv("ENGRAM_ENABLED", "true").lower() not in ("false", "0", "no")
-    )
-    engram_dir = review_memory_path or os.getenv("ENGRAM_DIR", "")
-    if os.getenv("LOCAL") is None:
-        _github_token, _github_repo, _pr_number, _commit_hash, comments_text, supplemental_context = (
-            _resolve_ci_env_vars()
-        )
-
-        # ── Cross-PR review memory via Engram ────────────────────────
-        # REVIEW_MEMORY_PATH points to the .engram/ dir (cached by GHA).
-        # The action reads/writes the SQLite DB using Python stdlib only.
-        if engram_enabled and engram_dir:
-            try:
-                from code_reviewer.review_memory import (
-                    build_context,
-                    ensure_engram,
-                    load_decisions,
-                    observation_count,
-                    query_similar,
-                )
-
-                ensure_engram(engram_dir)
-                count_before = observation_count(engram_dir, _github_repo)
-                if count_before > 0:
-                    # Token-minimised: load recent + query similar via FTS
-                    decisions = load_decisions(engram_dir, _github_repo, limit=30)
-                    # If the diff has a suggestion text, search for similar past ones
-                    similar = query_similar(
-                        engram_dir, _github_repo, diff[:500], max_results=3
-                    ) if diff else []
-                    review_memory_context = build_context(decisions, similar)
-                    if review_memory_context:
-                        logger.info(
-                            f"Loaded {count_before} past decisions "
-                            f"({len(similar)} similar via FTS) "
-                            f"from Engram at {engram_dir}"
-                        )
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                logger.warning(f"Engram review memory unavailable: {exc}")
-                review_memory_context = ""
+    context = _collect_ci_context(diff, review_memory_enabled, review_memory_path)
 
     # Request a code review
     review_conf: AiReviewConfig = {
@@ -608,42 +521,18 @@ def main(
         "temperature": temperature,
         "top_p": top_p,
         "prompt_chunk_size": diff_chunk_size,
-        "comments_text": comments_text,
-        "supplemental_context": supplemental_context,
-        "review_memory_context": review_memory_context,
+        "comments_text": context.comments_text,
+        "supplemental_context": context.supplemental_context,
+        "review_memory_context": context.review_memory_context,
     }
     chunked_reviews, summarized_review = run_review(client, review_conf)
     logger.debug(f"Summarized review: {summarized_review}")
     logger.debug(f"Chunked reviews: {chunked_reviews}")
 
-    # Format reviews with severity filtering
-    # Priority: CLI argument > environment variable > auto-adjust > default
-    if review_level:
-        min_severity = review_level
-    elif os.getenv("REVIEW_LEVEL"):
-        min_severity = os.getenv("REVIEW_LEVEL")
-    else:
-        # Auto-adjust based on diff size
-        diff_lines = diff.count("\n")
-        if diff_lines < 50:
-            min_severity = "TRIVIAL"
-            logger.info(f"Diff is small ({diff_lines} lines), auto-set review_level=TRIVIAL")
-        elif diff_lines > 500:
-            min_severity = "CRITICAL"
-            logger.info(f"Diff is large ({diff_lines} lines), auto-set review_level=CRITICAL")
-        else:
-            min_severity = "IMPORTANT"
-
-    # Parse all review items from chunked responses
-    all_review_items = []
-    for chunk_text in chunked_reviews:
-        parsed_items = parse_review_response(chunk_text)
-        all_review_items.extend(parsed_items)
-
-    # Apply severity filtering
+    min_severity = _resolve_min_severity(review_level, diff)
+    all_review_items = _parse_all_items(chunked_reviews)
     filtered_items = filter_by_severity(all_review_items, min_severity)
 
-    # Format for output (backward compatibility)
     review_comment = format_review_comment(
         summarized_review=summarized_review,
         chunked_reviews=chunked_reviews,
@@ -655,43 +544,156 @@ def main(
     write_github_output("review_result", review_comment)
     write_github_output("entire_prompt_body", get_review_prompt(extra_prompt=extra_prompt))
 
-    # Dispatch output based on mode (local vs CI)
     if os.getenv("LOCAL") is not None:
         _dispatch_local_output(filtered_items, summarized_review, min_severity)
-        return  # _dispatch_local_output calls sys.exit, but this keeps the linter happy
+        return  # _dispatch_local_output calls sys.exit
 
     _dispatch_ci_output(
         filtered_items=filtered_items,
         review_comment=review_comment,
-        github_token=_github_token,
-        github_repository=_github_repo,
-        pull_request_number=_pr_number,
-        git_commit_hash=_commit_hash,
+        github_token=context.github_token,
+        github_repository=context.github_repo,
+        pull_request_number=context.pr_number,
+        git_commit_hash=context.commit_hash,
     )
+    _store_pending_decisions(context, filtered_items)
 
-    # ── Store review suggestions as pending decisions in Engram ─────
-    # Each suggestion generated gets stored so future PRs can check
-    # whether similar feedback was already discussed.
-    if engram_enabled and engram_dir and filtered_items:
-        try:
-            from code_reviewer.review_memory import store_decisions_batch
 
-            pending = [
-                {
-                    "suggestion": item.get("comment", ""),
-                    "file_pattern": item.get("file", "*"),
-                    "decision": "suggested",
-                    "reason": "",
-                }
-                for item in filtered_items
-            ]
-            if pending:
-                stored = store_decisions_batch(
-                    engram_dir, _github_repo, _pr_number, pending
-                )
-                logger.info(f"Stored {stored} suggested decisions in Engram")
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            logger.warning(f"Failed to store decisions in Engram: {exc}")
+@dataclass
+class _CiContext:
+    """Everything the CI path needs from the environment and past decisions."""
+
+    github_token: str = ""
+    github_repo: str = ""
+    pr_number: int = 0
+    commit_hash: str = ""
+    comments_text: str = ""
+    supplemental_context: str = ""
+    review_memory_context: str = ""
+    engram_enabled: bool = False
+    engram_dir: str = ""
+
+
+def _run_learn_mode(mode: str, client: LLMClient, review_memory_path: str | None) -> bool:
+    """Run learn mode when requested; return True when the run is finished."""
+    if mode != "learn":
+        return False
+    from code_reviewer.learner import _parse_pr_number  # pylint: disable=import-outside-toplevel
+    from code_reviewer.learner import run as learner_run  # pylint: disable=import-outside-toplevel
+
+    result = learner_run(
+        github_token=os.getenv("GITHUB_TOKEN", ""),
+        repo=os.getenv("GITHUB_REPOSITORY", ""),
+        pr_number=_parse_pr_number(None),
+        engram_dir=review_memory_path or os.getenv("ENGRAM_DIR") or ".engram",
+        llm_client=client,
+    )
+    logger.info(f"Learn complete: {result}")
+    return True
+
+
+def _collect_ci_context(
+    diff: str,
+    review_memory_enabled: bool,
+    review_memory_path: str | None,
+) -> _CiContext:
+    """Resolve CI env vars and any cross-PR review memory for this run."""
+    engram_enabled = review_memory_enabled and (os.getenv("ENGRAM_ENABLED", "true").lower() not in ("false", "0", "no"))
+    context = _CiContext(
+        engram_enabled=engram_enabled,
+        engram_dir=review_memory_path or os.getenv("ENGRAM_DIR") or "",
+    )
+    if os.getenv("LOCAL") is not None:
+        return context
+
+    (
+        context.github_token,
+        context.github_repo,
+        context.pr_number,
+        context.commit_hash,
+        context.comments_text,
+        context.supplemental_context,
+    ) = _resolve_ci_env_vars()
+
+    if context.engram_enabled and context.engram_dir:
+        context.review_memory_context = _load_review_memory(context, diff)
+    return context
+
+
+def _load_review_memory(context: _CiContext, diff: str) -> str:
+    """Load past review decisions from Engram, tolerating any failure."""
+    try:
+        from code_reviewer.review_memory import (  # pylint: disable=import-outside-toplevel
+            build_context,
+            ensure_engram,
+            load_decisions,
+            observation_count,
+            query_similar,
+        )
+
+        ensure_engram(context.engram_dir)
+        count_before = observation_count(context.engram_dir, context.github_repo)
+        if count_before == 0:
+            return ""
+        decisions = load_decisions(context.engram_dir, context.github_repo, limit=30)
+        similar = query_similar(context.engram_dir, context.github_repo, diff[:500], max_results=3) if diff else []
+        memory_context = build_context(decisions, similar)
+        if memory_context:
+            logger.info(
+                f"Loaded {count_before} past decisions "
+                f"({len(similar)} similar via FTS) from Engram at {context.engram_dir}"
+            )
+        return memory_context
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning(f"Engram review memory unavailable: {exc}")
+        return ""
+
+
+def _resolve_min_severity(review_level: str | None, diff: str) -> str:
+    """Pick the severity threshold: CLI flag, env var, or auto by diff size."""
+    if review_level:
+        return review_level
+    if os.getenv("REVIEW_LEVEL"):
+        return os.getenv("REVIEW_LEVEL") or "IMPORTANT"
+
+    diff_lines = diff.count("\n")
+    if diff_lines < 50:
+        logger.info(f"Diff is small ({diff_lines} lines), auto-set review_level=TRIVIAL")
+        return "TRIVIAL"
+    if diff_lines > 500:
+        logger.info(f"Diff is large ({diff_lines} lines), auto-set review_level=CRITICAL")
+        return "CRITICAL"
+    return "IMPORTANT"
+
+
+def _parse_all_items(chunked_reviews: list[str]) -> list[dict]:
+    """Parse review items out of every chunk."""
+    all_review_items: list[dict] = []
+    for chunk_text in chunked_reviews:
+        all_review_items.extend(parse_review_response(chunk_text))
+    return all_review_items
+
+
+def _store_pending_decisions(context: _CiContext, filtered_items: list[dict]) -> None:
+    """Persist emitted suggestions as pending decisions, tolerating failures."""
+    if not (context.engram_enabled and context.engram_dir and filtered_items):
+        return
+    try:
+        from code_reviewer.review_memory import store_decisions_batch  # pylint: disable=import-outside-toplevel
+
+        pending = [
+            {
+                "suggestion": item.get("comment", ""),
+                "file_pattern": item.get("file", "*"),
+                "decision": "suggested",
+                "reason": "",
+            }
+            for item in filtered_items
+        ]
+        stored = store_decisions_batch(context.engram_dir, context.github_repo, context.pr_number, pending)
+        logger.info(f"Stored {stored} suggested decisions in Engram")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning(f"Failed to store decisions in Engram: {exc}")
 
 
 if __name__ == "__main__":

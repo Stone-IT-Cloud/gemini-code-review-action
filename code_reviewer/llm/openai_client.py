@@ -26,7 +26,6 @@ import os
 from typing import Any
 
 import requests
-from loguru import logger
 
 from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
 from code_reviewer.llm.provider_registry import register_provider
@@ -66,13 +65,16 @@ class OpenAIClient(LLMClient):
     """LLMClient for OpenAI-compatible APIs (OpenRouter, OpenAI, DeepSeek, etc.)."""
 
     def __init__(self, api_key: str, base_url: str) -> None:
+        """Store credentials and open the reusable HTTP session."""
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._session = requests.Session()
-        self._session.headers.update({
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        })
+        self._session.headers.update(
+            {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+        )
 
     @classmethod
     def from_env(cls) -> OpenAIClient:

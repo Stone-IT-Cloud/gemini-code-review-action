@@ -63,6 +63,13 @@ inputs:
     description: "Model name (e.g. gemini-2.5-flash, gpt-4o, claude-sonnet-4)"
     required: true
     default: "gemini-2.5-flash"
+  fallback_models:
+    description: >-
+      Comma-separated models tried when the primary is saturated (HTTP 5xx).
+      Leave empty to use the provider default (Gemini: gemini-3.6-flash,
+      gemini-3.5-flash-lite; other providers: no automatic fallback).
+    required: false
+    default: ""
   extra_prompt:
     description: "Extra prompt for Gemini"
     required: false
@@ -166,6 +173,7 @@ runs:
         PR_DIFF_FILE: ${{ inputs.pull_request_diff_file }}
         PR_DIFF_CHUNK_SIZE: ${{ inputs.pull_request_chunk_size }}
         MODEL: ${{ inputs.model }}
+        FALLBACK_MODELS: ${{ inputs.fallback_models }}
         EXTRA_PROMPT: ${{ inputs.extra_prompt }}
         TEMPERATURE: ${{ inputs.temperature }}
         TOP_P: ${{ inputs.top_p }}
@@ -202,6 +210,7 @@ runs:
 
         ARGS=(
           "--model=${MODEL}"
+          "--fallback-models=${FALLBACK_MODELS}"
           "--extra-prompt=${EXTRA_PROMPT}"
           "--temperature=${TEMPERATURE}"
           "--top-p=${TOP_P}"

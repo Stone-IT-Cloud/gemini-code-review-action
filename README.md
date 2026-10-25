@@ -23,6 +23,7 @@ If the diff exceeds the model's context window, the Action splits it into chunks
 - `github_pull_request_number` (required): PR number (defaults to `${{ github.event.pull_request.number }}`).
 - `git_commit_hash` (required): PR head SHA (defaults to `${{ github.event.pull_request.head.sha }}`).
 - `model` (required): AI model name (e.g., `gemini-2.5-flash`, `openai/gpt-4o`, `anthropic/claude-sonnet-4`, `deepseek/deepseek-chat`).
+- `fallback_models` (optional): Comma-separated models tried when the primary is saturated (HTTP 5xx). Empty means the provider default: for Gemini `gemini-3.6-flash,gemini-3.5-flash-lite`; other providers get no automatic fallback.
 - `extra_prompt` (optional): Additional system guidance to steer the review.
 - `temperature` (optional): Sampling temperature.
 - `top_p` (optional): Nucleus sampling.
@@ -51,6 +52,32 @@ env:
   GEMINI_QUOTA_TPM: "32000"
   GEMINI_QUOTA_RPD: "1500"
 ```
+
+## Model fallback and saturation handling
+
+Providers answer `503 UNAVAILABLE` ("this model is currently experiencing high demand") when the serving pool of **that specific model** is saturated. It is not a quota problem, and it can last from seconds to hours, so retrying the same model forever is a losing strategy.
+
+The action handles it in three layers, for every provider:
+
+1. **Bounded retries.** Each model gets `LLM_MAX_ATTEMPTS` attempts (default `3`) with exponential backoff plus jitter (`LLM_INITIAL_BACKOFF_SECONDS`, default `2`; `LLM_MAX_BACKOFF_SECONDS`, default `20`).
+2. **Model fallback.** When a model exhausts its retries on 5xx, the next model in the chain is used: `model` first, then `fallback_models`, then the provider default chain. A model that answers stays selected for the rest of the run.
+3. **One-hour saturation flag.** The saturated model is flagged for `LLM_MODEL_HEALTH_TTL_SECONDS` (default `3600`) and skipped for the rest of the run instead of burning the retry budget again on every chunk.
+
+Requests rejected with a non-retryable status (invalid key, malformed request) are not retried and do not flag anything: only an actual 5xx is evidence of provider-side saturation.
+
+```yaml
+with:
+  llm_provider: gemini
+  model: gemini-3.8-flash
+  fallback_models: gemini-3.6-flash,gemini-3.5-flash-lite
+```
+
+### Model chain environment variables
+
+- `LLM_MODEL_CHAIN`: full comma-separated chain, overriding `model` and `fallback_models`.
+- `LLM_MAX_ATTEMPTS` (default `3`): attempts per model before switching.
+- `LLM_INITIAL_BACKOFF_SECONDS` / `LLM_MAX_BACKOFF_SECONDS` (defaults `2` / `20`).
+- `LLM_MODEL_HEALTH_FILE` / `LLM_MODEL_HEALTH_TTL_SECONDS`: state location and flag lifetime. Without a file the flag lives only in memory for the current run.
 
 ## Provider Configuration
 

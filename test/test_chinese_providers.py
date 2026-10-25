@@ -20,6 +20,7 @@ class TestChineseProvidersRegistration:
 
     def test_all_providers_registered(self):
         from code_reviewer.llm import list_providers
+
         providers = list_providers()
         for name in ("deepseek", "qwen", "kimi", "baichuan", "zhipu"):
             assert name in providers, f"{name} not registered"
@@ -37,9 +38,8 @@ class TestDeepSeekClient:
             assert c._api_key == "sk-test"
 
     def test_missing_key_raises(self):
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="DEEPSEEK_API_KEY"):
-                DeepSeekClient.from_env()
+        with patch.dict("os.environ", {}, clear=True), pytest.raises(ValueError, match="DEEPSEEK_API_KEY"):
+            DeepSeekClient.from_env()
 
 
 class TestQwenClient:
@@ -59,9 +59,8 @@ class TestQwenClient:
             assert c._api_key == "sk-openai"
 
     def test_missing_key_raises(self):
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="QWEN_API_KEY"):
-                QwenClient.from_env()
+        with patch.dict("os.environ", {}, clear=True), pytest.raises(ValueError, match="QWEN_API_KEY"):
+            QwenClient.from_env()
 
 
 class TestKimiClient:
@@ -81,9 +80,8 @@ class TestKimiClient:
             assert c._api_key == "sk-openai"
 
     def test_missing_key_raises(self):
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="KIMI_API_KEY"):
-                KimiClient.from_env()
+        with patch.dict("os.environ", {}, clear=True), pytest.raises(ValueError, match="KIMI_API_KEY"):
+            KimiClient.from_env()
 
 
 class TestBaichuanClient:
@@ -98,9 +96,8 @@ class TestBaichuanClient:
             assert c._api_key == "sk-oa"
 
     def test_missing_key_raises(self):
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="BAICHUAN_API_KEY"):
-                BaichuanClient.from_env()
+        with patch.dict("os.environ", {}, clear=True), pytest.raises(ValueError, match="BAICHUAN_API_KEY"):
+            BaichuanClient.from_env()
 
 
 class TestZhipuClient:
@@ -115,6 +112,5 @@ class TestZhipuClient:
             assert c._api_key == "sk-oa"
 
     def test_missing_key_raises(self):
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="ZHIPU_API_KEY"):
-                ZhipuClient.from_env()
+        with patch.dict("os.environ", {}, clear=True), pytest.raises(ValueError, match="ZHIPU_API_KEY"):
+            ZhipuClient.from_env()

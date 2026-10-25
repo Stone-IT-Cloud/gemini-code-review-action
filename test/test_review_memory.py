@@ -11,7 +11,6 @@
 #  limitations under the License.
 """Tests for code_reviewer/review_memory.py — Engram-backed cross-PR review memory."""
 
-import json
 import os
 import tempfile
 
@@ -97,12 +96,7 @@ class TestEnsureEngram:
             import sqlite3
 
             conn = sqlite3.connect(os.path.join(tmp, "engram.db"))
-            tables = {
-                r[0]
-                for r in conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table'"
-                ).fetchall()
-            }
+            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
             conn.close()
             assert "observations" in tables
             assert "sessions" in tables
@@ -247,9 +241,7 @@ class TestQuerySimilar:
                 reason="Consistency",
                 pr_number=1,
             )
-            results = query_similar(
-                tmp, "owner/repo", "unrelated topic about databases"
-            )
+            results = query_similar(tmp, "owner/repo", "unrelated topic about databases")
             assert results == []
 
     def test_finds_similar_suggestion(self):
@@ -263,9 +255,7 @@ class TestQuerySimilar:
                 reason="Consistency",
                 pr_number=1,
             )
-            results = query_similar(
-                tmp, "owner/repo", "using percent formatting"
-            )
+            results = query_similar(tmp, "owner/repo", "using percent formatting")
             assert len(results) >= 1
             assert results[0]["decision"] == "rejected"
 

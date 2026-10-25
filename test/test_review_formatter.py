@@ -13,7 +13,6 @@
 
 from code_reviewer.review_formatter import _parse_diff_stats, build_review_summary
 
-
 # ---------------------------------------------------------------------------
 # _parse_diff_stats
 # ---------------------------------------------------------------------------
@@ -124,9 +123,7 @@ class TestFormatReviewCommentWithSummary:
 
         result = format_review_comment(
             summarized_review="Summary text",
-            chunked_reviews=[
-                '[{"file": "a.py", "line": 1, "severity": "critical", "comment": "X"}]'
-            ],
+            chunked_reviews=['[{"file": "a.py", "line": 1, "severity": "critical", "comment": "X"}]'],
             min_severity="trivial",
             diff="--- a/a.py\n+++ b/a.py\n@@ -1 +1,2 @@\n+new\n",
         )
@@ -138,9 +135,7 @@ class TestFormatReviewCommentWithSummary:
 
         result = format_review_comment(
             summarized_review="Summary text",
-            chunked_reviews=[
-                '[{"file": "a.py", "line": 1, "severity": "critical", "comment": "X"}]'
-            ],
+            chunked_reviews=['[{"file": "a.py", "line": 1, "severity": "critical", "comment": "X"}]'],
             min_severity="trivial",
         )
         # Without diff param, backward compatible — no summary
@@ -156,6 +151,7 @@ class TestFormatReviewCommentWithSummary:
         chunk = '[{"file": "a.py", "line": 1, "severity": "trivial", "comment": ""}]'
         # Verify items are invalid on their own
         import json
+
         assert _validate_review_item(json.loads(chunk)[0]) is None
 
         # summarized_review has the same items, but shorter
@@ -174,8 +170,8 @@ class TestFormatReviewCommentWithSummary:
         from code_reviewer.review_formatter import format_review_comment
 
         result = format_review_comment(
-            summarized_review='[]',
-            chunked_reviews=['[]'],
+            summarized_review="[]",
+            chunked_reviews=["[]"],
             min_severity="important",
         )
         assert "✅" in result

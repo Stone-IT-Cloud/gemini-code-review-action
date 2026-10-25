@@ -44,11 +44,13 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
-          git fetch origin "${{ github.event.pull_request.head.ref }}"
-          git fetch origin "${{ github.event.pull_request.base.ref }}"
-          git diff "origin/${{ github.event.pull_request.base.ref }}" > "${{ env.PR_DIFF_PATH }}"
-          echo "Diff generated: $(wc -l < ${{ env.PR_DIFF_PATH }}) lines"
+          git fetch origin "$HEAD_REF"
+          git fetch origin "$BASE_REF"
+          git diff "origin/$BASE_REF" > "$PR_DIFF_PATH"
+          echo "Diff generated: $(wc -l < "$PR_DIFF_PATH") lines"
 
       - name: Restore Engram review memory cache
         id: cache-restore

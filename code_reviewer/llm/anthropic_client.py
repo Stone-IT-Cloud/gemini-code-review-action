@@ -24,7 +24,6 @@ import os
 from typing import Any
 
 import requests
-from loguru import logger
 
 from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
 from code_reviewer.llm.provider_registry import register_provider
@@ -50,15 +49,18 @@ class AnthropicClient(LLMClient):
     """LLMClient for Anthropic Claude models via the Messages API."""
 
     def __init__(self, api_key: str, base_url: str, api_version: str) -> None:
+        """Store credentials and the API version used by every request."""
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._api_version = api_version
         self._session = requests.Session()
-        self._session.headers.update({
-            "x-api-key": api_key,
-            "anthropic-version": api_version,
-            "Content-Type": "application/json",
-        })
+        self._session.headers.update(
+            {
+                "x-api-key": api_key,
+                "anthropic-version": api_version,
+                "Content-Type": "application/json",
+            }
+        )
 
     @classmethod
     def from_env(cls) -> AnthropicClient:
@@ -70,8 +72,7 @@ class AnthropicClient(LLMClient):
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError(
-                "ANTHROPIC_API_KEY is required for the 'anthropic' provider. "
-                "Set it as an environment variable."
+                "ANTHROPIC_API_KEY is required for the 'anthropic' provider. " "Set it as an environment variable."
             )
         base_url = os.getenv("ANTHROPIC_BASE_URL", ANTHROPIC_BASE_URL)
         api_version = os.getenv("ANTHROPIC_VERSION", ANTHROPIC_VERSION)
@@ -109,8 +110,7 @@ class AnthropicClient(LLMClient):
             usage={
                 "prompt_tokens": usage.get("input_tokens", 0),
                 "output_tokens": usage.get("output_tokens", 0),
-                "total_tokens": (usage.get("input_tokens", 0) or 0)
-                + (usage.get("output_tokens", 0) or 0),
+                "total_tokens": (usage.get("input_tokens", 0) or 0) + (usage.get("output_tokens", 0) or 0),
             },
         )
 

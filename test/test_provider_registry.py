@@ -13,13 +13,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from code_reviewer.llm.base import LLMClient, LLMConfig, LLMResponse
 from code_reviewer.llm.provider_registry import get_llm_client, list_providers, register_provider
-
 
 # ── Mock provider for testing ───────────────────────────────────────────────
 

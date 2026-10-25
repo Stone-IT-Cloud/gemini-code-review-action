@@ -120,6 +120,7 @@ class GeminiClient(LLMClient):
     """LLMClient implementation for Google Gemini (google.genai SDK)."""
 
     def __init__(self, client: Any) -> None:
+        """Wrap an existing ``genai.Client``."""
         self._client = client
 
     @classmethod

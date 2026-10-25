@@ -44,12 +44,10 @@ class DeepSeekClient(OpenAIClient):
 
     @classmethod
     def from_env(cls) -> DeepSeekClient:
+        """Build the client from ``DEEPSEEK_API_KEY`` or ``OPENAI_API_KEY``."""
         api_key = os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise ValueError(
-                "DEEPSEEK_API_KEY or OPENAI_API_KEY is required "
-                "for the 'deepseek' provider."
-            )
+            raise ValueError("DEEPSEEK_API_KEY or OPENAI_API_KEY is required " "for the 'deepseek' provider.")
         base_url = os.getenv("DEEPSEEK_BASE_URL", DEEPSEEK_BASE_URL)
         return cls(api_key=api_key, base_url=base_url)
 
@@ -63,15 +61,11 @@ class QwenClient(OpenAIClient):
 
     @classmethod
     def from_env(cls) -> QwenClient:
-        api_key = (
-            os.getenv("QWEN_API_KEY")
-            or os.getenv("DASHSCOPE_API_KEY")
-            or os.getenv("OPENAI_API_KEY")
-        )
+        """Build the client from the provider API key environment variables."""
+        api_key = os.getenv("QWEN_API_KEY") or os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError(
-                "QWEN_API_KEY, DASHSCOPE_API_KEY, or OPENAI_API_KEY is required "
-                "for the 'qwen' provider."
+                "QWEN_API_KEY, DASHSCOPE_API_KEY, or OPENAI_API_KEY is required " "for the 'qwen' provider."
             )
         base_url = os.getenv("QWEN_BASE_URL", QWEN_BASE_URL)
         return cls(api_key=api_key, base_url=base_url)
@@ -86,15 +80,11 @@ class KimiClient(OpenAIClient):
 
     @classmethod
     def from_env(cls) -> KimiClient:
-        api_key = (
-            os.getenv("KIMI_API_KEY")
-            or os.getenv("MOONSHOT_API_KEY")
-            or os.getenv("OPENAI_API_KEY")
-        )
+        """Build the client from the provider API key environment variables."""
+        api_key = os.getenv("KIMI_API_KEY") or os.getenv("MOONSHOT_API_KEY") or os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError(
-                "KIMI_API_KEY, MOONSHOT_API_KEY, or OPENAI_API_KEY is required "
-                "for the 'kimi' provider."
+                "KIMI_API_KEY, MOONSHOT_API_KEY, or OPENAI_API_KEY is required " "for the 'kimi' provider."
             )
         base_url = os.getenv("KIMI_BASE_URL", KIMI_BASE_URL)
         return cls(api_key=api_key, base_url=base_url)
@@ -109,12 +99,10 @@ class BaichuanClient(OpenAIClient):
 
     @classmethod
     def from_env(cls) -> BaichuanClient:
+        """Build the client from the provider API key environment variables."""
         api_key = os.getenv("BAICHUAN_API_KEY") or os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise ValueError(
-                "BAICHUAN_API_KEY or OPENAI_API_KEY is required "
-                "for the 'baichuan' provider."
-            )
+            raise ValueError("BAICHUAN_API_KEY or OPENAI_API_KEY is required " "for the 'baichuan' provider.")
         base_url = os.getenv("BAICHUAN_BASE_URL", BAICHUAN_BASE_URL)
         return cls(api_key=api_key, base_url=base_url)
 
@@ -128,12 +116,10 @@ class ZhipuClient(OpenAIClient):
 
     @classmethod
     def from_env(cls) -> ZhipuClient:
+        """Build the client from the provider API key environment variables."""
         api_key = os.getenv("ZHIPU_API_KEY") or os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise ValueError(
-                "ZHIPU_API_KEY or OPENAI_API_KEY is required "
-                "for the 'zhipu' provider."
-            )
+            raise ValueError("ZHIPU_API_KEY or OPENAI_API_KEY is required " "for the 'zhipu' provider.")
         base_url = os.getenv("ZHIPU_BASE_URL", ZHIPU_BASE_URL)
         return cls(api_key=api_key, base_url=base_url)
 

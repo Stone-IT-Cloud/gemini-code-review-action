@@ -114,6 +114,28 @@ def _parse_diff_stats(diff: str) -> dict[str, int]:
     return {"additions": additions, "deletions": deletions, "files": files}
 
 
+def _count_by_severity(all_items: list[dict]) -> tuple[dict[str, int], dict[str, list[str]]]:
+    """Count items per severity and keep up to two short descriptions each."""
+    counts: dict[str, int] = {}
+    short_descriptions: dict[str, list[str]] = {}
+    for item in all_items:
+        sev = item.get("severity", "important").lower()
+        counts.setdefault(sev, 0)
+        short_descriptions.setdefault(sev, [])
+        counts[sev] += 1
+        if len(short_descriptions[sev]) < 2:
+            short_descriptions[sev].append((item.get("comment") or "")[:60])
+    return counts, short_descriptions
+
+
+def _diff_stats_line(diff_stats: dict[str, int]) -> str:
+    """Render the diff-stats header line."""
+    additions = diff_stats.get("additions", 0)
+    deletions = diff_stats.get("deletions", 0)
+    files = diff_stats.get("files", 0)
+    return f"📋 Review: +{additions} / -{deletions} líneas, {files} archivos"
+
+
 def build_review_summary(
     all_items: list[dict],
     diff_stats: dict[str, int] | None = None,
@@ -129,42 +151,49 @@ def build_review_summary(
     """
     if not all_items:
         if diff_stats:
-            a, d = diff_stats.get("additions", 0), diff_stats.get("deletions", 0)
-            f = diff_stats.get("files", 0)
-            return f"📋 Review: +{a} / -{d} líneas, {f} archivos\n✅ No se encontraron issues."
+            return f"{_diff_stats_line(diff_stats)}\n✅ No se encontraron issues."
         return "✅ No se encontraron issues."
 
-    # Count by severity
-    counts: dict[str, int] = {}
-    short_descriptions: dict[str, list[str]] = {}
-    for item in all_items:
-        sev = item.get("severity", "important").lower()
-        if sev not in counts:
-            counts[sev] = 0
-            short_descriptions[sev] = []
-        counts[sev] += 1
-        comment = (item.get("comment") or "")[:60]
-        if len(short_descriptions[sev]) < 2:  # max 2 short descriptions per severity
-            short_descriptions[sev].append(comment)
-
-    # Build header
-    lines: list[str] = []
-    if diff_stats:
-        a, d = diff_stats.get("additions", 0), diff_stats.get("deletions", 0)
-        f = diff_stats.get("files", 0)
-        lines.append(f"📋 Review: +{a} / -{d} líneas, {f} archivos")
-    else:
-        lines.append("📋 Review")
-
+    counts, short_descriptions = _count_by_severity(all_items)
+    lines = [_diff_stats_line(diff_stats) if diff_stats else "📋 Review"]
     for sev in ("critical", "important", "trivial"):
         if sev in counts:
-            count = counts[sev]
             icon = SEVERITY_ICONS.get(sev, "•")
             descs = short_descriptions.get(sev, [])
             desc_str = f" — {', '.join(descs)}" if descs else ""
-            lines.append(f"{icon} {count} {sev.upper()}{desc_str}")
-
+            lines.append(f"{icon} {counts[sev]} {sev.upper()}{desc_str}")
     return "\n".join(lines)
+
+
+def _structured_body(
+    chunked_reviews: list[str],
+    summarized_review: str,
+    min_severity: str,
+) -> tuple[str, list[dict]]:
+    """Resolve the per-item body, falling back to raw text when nothing parses."""
+    all_items, any_parsed = _collect_review_items(chunked_reviews)
+    if all_items and min_severity:
+        all_items = filter_by_severity(all_items, min_severity)
+    if all_items:
+        return "\n\n".join(_format_item_line(item) for item in all_items), all_items
+    if any_parsed:
+        return _fallback_from_summary(summarized_review, min_severity)
+    return ("\n".join(chunked_reviews) if chunked_reviews else ""), all_items
+
+
+def _fallback_from_summary(summarized_review: str, min_severity: str) -> tuple[str, list[dict]]:
+    """Parse the summary itself when the chunk payload was valid JSON but unusable."""
+    stripped = summarized_review.strip()
+    if not (stripped.startswith("[") or stripped.startswith("{")):
+        return "", []
+    from code_reviewer.review_parser import parse_review_response  # pylint: disable=import-outside-toplevel
+
+    items = parse_review_response(summarized_review)
+    if items and min_severity:
+        items = filter_by_severity(items, min_severity)
+    if not items:
+        return "", []
+    return "\n\n".join(_format_item_line(item) for item in items), items
 
 
 def format_review_comment(
@@ -185,66 +214,31 @@ def format_review_comment(
     Returns:
         Formatted review comment string.
     """
-    all_items, any_parsed = _collect_review_items(chunked_reviews)
+    structured_body, all_items = _structured_body(chunked_reviews, summarized_review, min_severity)
+    body = _wrap_body(structured_body, summarized_review, chunked_reviews)
 
-    if all_items and min_severity:
-        all_items = filter_by_severity(all_items, min_severity)
-
-    if all_items:
-        structured_body = "\n\n".join(_format_item_line(item) for item in all_items)
-    elif any_parsed:
-        # Valid JSON was received but individual items failed validation.
-        # Try parsing summarized_review as a fallback source of items.
-        if summarized_review.strip().startswith("[") or summarized_review.strip().startswith("{"):
-            from code_reviewer.review_parser import parse_review_response
-
-            fallback_items = parse_review_response(summarized_review)
-            if fallback_items and min_severity:
-                fallback_items = filter_by_severity(fallback_items, min_severity)
-            if fallback_items:
-                structured_body = "\n\n".join(_format_item_line(item) for item in fallback_items)
-                all_items = fallback_items  # update for summary
-            else:
-                structured_body = ""
-        else:
-            structured_body = ""
-    else:
-        # Raw text — could be Gemini's summary or actual review text
-        structured_body = "\n".join(chunked_reviews) if chunked_reviews else ""
-
-    # Build the body (with or without details wrapper)
-    if len(chunked_reviews) <= 1:
-        # Use structured_body; if empty, use summarized_review only if it's
-        # human-readable text (not raw JSON).
-        if not structured_body:
-            stripped = summarized_review.strip()
-            if stripped.startswith("[") or stripped.startswith("{"):
-                body = ""
-            else:
-                body = summarized_review
-        else:
-            body = structured_body
-    else:
-        body = (
-            f"<details>\n"
-            f"    <summary>{summarized_review}</summary>\n"
-            f"    {structured_body}\n"
-            f"    </details>"
-        )
-
-    # Prepend structured summary if diff stats are available
     if diff is not None:
-        diff_stats = _parse_diff_stats(diff)
-        summary = build_review_summary(
-            all_items=all_items,
-            diff_stats=diff_stats,
-        )
+        summary = build_review_summary(all_items=all_items, diff_stats=_parse_diff_stats(diff))
         if summary:
             body = f"{summary}\n\n---\n\n{body}"
 
-    # If the body is empty or contains only raw JSON, provide a clean message
     if not body.strip() or body.strip().startswith("["):
         level_label = min_severity.upper() if min_severity else "TRIVIAL"
         body = f"✅ Code review complete — no issues found at **{level_label}** level."
-
     return body
+
+
+def _wrap_body(
+    structured_body: str,
+    summarized_review: str,
+    chunked_reviews: list[str],
+) -> str:
+    """Pick between the structured body, the raw summary and a details wrapper."""
+    if len(chunked_reviews) > 1:
+        return f"<details>\n    <summary>{summarized_review}</summary>\n    {structured_body}\n    </details>"
+    if structured_body:
+        return structured_body
+    stripped = summarized_review.strip()
+    if stripped.startswith("[") or stripped.startswith("{"):
+        return ""
+    return summarized_review

@@ -23,7 +23,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 
-from code_reviewer.utils import _get_usage_metadata, _safe_str
+from code_reviewer.utils import _get_usage_metadata
 
 
 @dataclass
@@ -156,10 +156,7 @@ class QuotaTracker:
             output_tokens = usage.get("output_tokens", "?")
             total_tokens_val = usage.get("total_tokens", "?")
             usage_bits.append(
-                "usage_tokens="
-                f"prompt={prompt_tokens},"
-                f"output={output_tokens},"
-                f"total={total_tokens_val}"
+                "usage_tokens=" f"prompt={prompt_tokens}," f"output={output_tokens}," f"total={total_tokens_val}"
             )
         if remaining:
             usage_bits.append("run_estimated_remaining=" + ",".join(f"{k}={v}" for k, v in remaining.items()))

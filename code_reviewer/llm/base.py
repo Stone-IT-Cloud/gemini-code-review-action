@@ -56,6 +56,15 @@ class LLMClient(ABC):
             LLMResponse with generated text and token usage.
         """
 
+    @classmethod
+    def from_env(cls) -> LLMClient:
+        """Build the client from environment variables.
+
+        Providers override this; the base implementation only exists so the
+        provider registry can call it on a ``type[LLMClient]``.
+        """
+        raise NotImplementedError(f"{cls.__name__} does not implement from_env()")
+
     @abstractmethod
     def get_context_limit(self, model: str) -> int:
         """Return the model's input token limit.

@@ -340,11 +340,17 @@ class TestReviewLevelCLI:
 
         try:
             runner = CliRunner()
-            result = runner.invoke(main, [
-                "--diff-file", test_diff_file,
-                "--review-level", "CRITICAL",
-                "--model", "test-model",
-            ])
+            result = runner.invoke(
+                main,
+                [
+                    "--diff-file",
+                    test_diff_file,
+                    "--review-level",
+                    "CRITICAL",
+                    "--model",
+                    "test-model",
+                ],
+            )
             assert result.exit_code == 0, f"Command failed: {result.output}"
             mock_format.assert_called_once()
             assert mock_format.call_args[1]["min_severity"] == "CRITICAL"

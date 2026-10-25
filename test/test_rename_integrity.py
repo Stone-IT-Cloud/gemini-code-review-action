@@ -11,6 +11,7 @@ These tests are structural regression guards:
 grep exit-code semantics used throughout: 0 = matches found (FAIL),
 1 = no matches (PASS), 2 = grep error (FAIL, e.g. missing path).
 """
+
 from __future__ import annotations
 
 import os
@@ -66,8 +67,7 @@ def _grep_must_not_match(pattern: str, paths: list[Path], what: str, extra_args:
     """Assert grep exits 1 (no match). Exit 0 (match) or 2 (error) is a failure."""
     result = _run_grep(pattern, paths, extra_args)
     assert result.returncode == 1, (
-        f"grep exit {result.returncode} (expected 1 = no match) for {what} "
-        f"pattern {pattern!r}:\n{result.stdout}"
+        f"grep exit {result.returncode} (expected 1 = no match) for {what} " f"pattern {pattern!r}:\n{result.stdout}"
     )
 
 
@@ -88,14 +88,10 @@ def test_no_src_token_in_config_files() -> None:
 def test_dockerfile_keeps_safe_path_entrypoint() -> None:
     """Dockerfile must copy the renamed package and keep `-P` + PYTHONPATH."""
     dockerfile = (ROOT / "Dockerfile").read_text()
-    assert "COPY code_reviewer/ ./code_reviewer/" in dockerfile, (
-        "Dockerfile must COPY the renamed package"
-    )
-    assert "ENV PYTHONPATH=/app" in dockerfile, (
-        "Dockerfile must keep PYTHONPATH=/app so intra-package imports resolve"
-    )
+    assert "COPY code_reviewer/ ./code_reviewer/" in dockerfile, "Dockerfile must COPY the renamed package"
+    assert "ENV PYTHONPATH=/app" in dockerfile, "Dockerfile must keep PYTHONPATH=/app so intra-package imports resolve"
     assert '"python", "-P", "-m", "code_reviewer.main"' in dockerfile, (
-        "Dockerfile ENTRYPOINT must be [\"python\", \"-P\", \"-m\", \"code_reviewer.main\"]; "
+        'Dockerfile ENTRYPOINT must be ["python", "-P", "-m", "code_reviewer.main"]; '
         "dropping -P regresses the src-layout shadowing defect"
     )
 
@@ -112,12 +108,8 @@ def _make_decoy_repo(tmp_path: Path) -> Path:
         pkg_dir = tmp_path / pkg
         pkg_dir.mkdir()
         (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
-    (tmp_path / "src" / "main.py").write_text(
-        'print("DECOY_SRC_MAIN_EXECUTED")\n', encoding="utf-8"
-    )
-    (tmp_path / "code_reviewer" / "main.py").write_text(
-        'print("DECOY_SHADOW_EXECUTED")\n', encoding="utf-8"
-    )
+    (tmp_path / "src" / "main.py").write_text('print("DECOY_SRC_MAIN_EXECUTED")\n', encoding="utf-8")
+    (tmp_path / "code_reviewer" / "main.py").write_text('print("DECOY_SHADOW_EXECUTED")\n', encoding="utf-8")
     return tmp_path
 
 
@@ -147,6 +139,5 @@ def test_without_safe_path_flag_decoy_shadows(tmp_path) -> None:
     decoy_dir = _make_decoy_repo(tmp_path)
     result = _run_entrypoint(decoy_dir, safe_path=False)
     assert "DECOY_SHADOW_EXECUTED" in result.stdout, (
-        "expected decoy code_reviewer/ to shadow the action when -P is missing:\n"
-        f"{result.stdout}\n{result.stderr}"
+        "expected decoy code_reviewer/ to shadow the action when -P is missing:\n" f"{result.stdout}\n{result.stderr}"
     )

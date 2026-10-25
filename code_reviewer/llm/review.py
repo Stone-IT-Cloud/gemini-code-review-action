@@ -22,20 +22,21 @@ from __future__ import annotations
 
 import os
 import time
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from code_reviewer.prompts import get_review_prompt, get_summarize_prompt
-from code_reviewer.utils import calculate_char_budget, chunk_string, _safe_str
+from code_reviewer.utils import _safe_str, calculate_char_budget, chunk_string
 
 if TYPE_CHECKING:
-    from code_reviewer.llm.base import LLMClient, LLMConfig
+    from code_reviewer.llm.base import LLMClient
 
 DEFAULT_TOKEN_LIMIT = 1_000_000
 
 
-def run_review(client: LLMClient, config: dict) -> tuple[list[str], str]:
+def run_review(client: LLMClient, config: Mapping[str, Any]) -> tuple[list[str], str]:
     """Run a code review using any LLM provider.
 
     Handles budget check, chunking, and optional summarization.
@@ -144,8 +145,7 @@ def _build_prompt_parts(
     if comments_text.strip():
         parts.append(
             "\n\n[Existing PR comments context]\n"
-            "Take these into consideration when performing your review.\n\n"
-            + comments_text
+            "Take these into consideration when performing your review.\n\n" + comments_text
         )
     parts.append("\n\nNow provide your review according to the earlier instructions.")
     return "\n".join(parts)

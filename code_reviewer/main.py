@@ -31,6 +31,7 @@ from code_reviewer.github_client import (
 )
 from code_reviewer.llm import LLMClient, get_llm_client
 from code_reviewer.llm.review import run_review
+from code_reviewer.model_health import ModelHealthStore
 from code_reviewer.prompts import get_review_prompt
 from code_reviewer.review_formatter import filter_by_severity, format_review_comment
 from code_reviewer.review_parser import parse_review_response
@@ -424,6 +425,13 @@ def _dispatch_ci_output(
     help="AI model name (e.g. gemini-2.5-flash, gemini-2.5-pro)",
 )
 @click.option(
+    "--fallback-models",
+    type=click.STRING,
+    required=False,
+    default="",
+    help="Comma-separated models tried when the configured model is saturated (HTTP 5xx).",
+)
+@click.option(
     "--provider",
     type=click.Choice(
         ["gemini", "openai", "openrouter", "deepseek", "qwen", "kimi", "baichuan", "zhipu", "anthropic"],
@@ -483,6 +491,7 @@ def main(
     diff_chunk_size: int,
     model: str,
     provider: str | None,
+    fallback_models: str,
     extra_prompt: str,
     temperature: float,
     top_p: float,
@@ -520,12 +529,14 @@ def main(
         "model": model,
         "temperature": temperature,
         "top_p": top_p,
+        "fallback_models": fallback_models,
         "prompt_chunk_size": diff_chunk_size,
         "comments_text": context.comments_text,
         "supplemental_context": context.supplemental_context,
         "review_memory_context": context.review_memory_context,
     }
-    chunked_reviews, summarized_review = run_review(client, review_conf)
+    health = ModelHealthStore.from_env()
+    chunked_reviews, summarized_review = run_review(client, review_conf, health=health)
     logger.debug(f"Summarized review: {summarized_review}")
     logger.debug(f"Chunked reviews: {chunked_reviews}")
 

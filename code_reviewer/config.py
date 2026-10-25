@@ -25,6 +25,7 @@ class AiReviewConfig(TypedDict):
     extra_prompt: str
     prompt_chunk_size: int
     comments_text: str
+    fallback_models: NotRequired[str]
     temperature: NotRequired[float]
     top_p: NotRequired[float]
     max_output_tokens: NotRequired[int]
